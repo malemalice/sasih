@@ -19,11 +19,10 @@ private struct MenuBarIcon: View {
     @ObservedObject var viewModel: DisplayStateViewModel
 
     var body: some View {
-        // A laptop glyph with the screen either outlined (display on) or
-        // filled solid (display off) — a plain moon/crescent would be easy
-        // to mistake for the system Do Not Disturb status icon, so the
-        // status-bar glyph stays literal about what's being toggled while
-        // the moon motif lives on the app icon instead.
+        // Same gibbous-moon silhouette as the app icon — filled when the
+        // display is on, outlined/hollow when it's off. The full, rounded
+        // shape (vs. a thin crescent) keeps it from reading as the system
+        // Do Not Disturb status icon while still matching the app's brand.
         Image(nsImage: MenuBarIcon.image(off: viewModel.isInternalDisplayOff))
             .accessibilityLabel(viewModel.isInternalDisplayOff ? "Sasih — internal display off" : "Sasih — internal display on")
     }
