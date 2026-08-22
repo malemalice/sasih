@@ -25,7 +25,7 @@ The one real risk with a feature like this is getting stuck with a black interna
 
 ## Install
 
-Download the latest DMG from [Releases](https://github.com/adaptivid/sasih/releases), open it, and drag Sasih into Applications. Since this isn't distributed through the App Store (see [Why the private API](#why-the-private-api) below), macOS Gatekeeper may ask you to confirm before first launch.
+Download the latest DMG from [Releases](https://github.com/malemalice/sasih/releases), open it, and drag Sasih into Applications. Since this isn't distributed through the App Store (see [Why the private API](#why-the-private-api) below), macOS Gatekeeper may ask you to confirm before first launch.
 
 ## How it works
 
