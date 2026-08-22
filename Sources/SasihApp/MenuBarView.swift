@@ -56,6 +56,11 @@ struct MenuBarView: View {
             Divider()
                 .padding(.vertical, 4)
 
+            MenuRow(action: showAboutPanel) {
+                Text("About Sasih")
+                    .font(.system(size: 13))
+            }
+
             MenuRow(action: { NSApplication.shared.terminate(nil) }) {
                 Text("Quit Sasih")
                     .font(.system(size: 13))
@@ -63,6 +68,18 @@ struct MenuBarView: View {
             .padding(.bottom, 4)
         }
         .frame(width: 280)
+    }
+
+    private func showAboutPanel() {
+        let credits = NSAttributedString(
+            string: "Turn off your MacBook's built-in display without closing the lid.",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11),
+                .foregroundColor: NSColor.secondaryLabelColor,
+            ]
+        )
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        NSApplication.shared.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
     private var header: some View {
