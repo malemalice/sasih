@@ -1,5 +1,5 @@
 import Foundation
-@testable import BlackoutCore
+@testable import SasihCore
 
 /// Kept in a file that does NOT import `Testing`, working around a missing
 /// `_Testing_Foundation` cross-import overlay module in this machine's
@@ -9,10 +9,10 @@ import Foundation
 /// into these scenario functions, keeping Testing+Foundation in separate files.
 enum DisplayIDStoreScenario {
     private static func withStore<T>(_ body: (DisplayIDStore, UserDefaults) -> T) -> T {
-        let suiteName = "BlackoutCoreTests.\(UUID().uuidString)"
+        let suiteName = "SasihCoreTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         let fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("blackout_test_\(UUID().uuidString).txt")
+            .appendingPathComponent("sasih_test_\(UUID().uuidString).txt")
         defer {
             defaults.removePersistentDomain(forName: suiteName)
             try? FileManager.default.removeItem(at: fileURL)
@@ -42,11 +42,11 @@ enum DisplayIDStoreScenario {
 
     static func usesDefaultsWhenFileIsCorruptOrMissing() -> Bool {
         var storedFileURL: URL!
-        let suiteName = "BlackoutCoreTests.\(UUID().uuidString)"
+        let suiteName = "SasihCoreTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         storedFileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("blackout_test_\(UUID().uuidString).txt")
+            .appendingPathComponent("sasih_test_\(UUID().uuidString).txt")
         let store = DisplayIDStore(defaults: defaults, fileURL: storedFileURL)
         store.save(9)
         try? FileManager.default.removeItem(at: storedFileURL)

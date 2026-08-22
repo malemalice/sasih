@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import BlackoutCore
+@testable import SasihCore
 
 private final class FakeConfigurer: DisplayConfiguring {
     var shouldSucceed = true

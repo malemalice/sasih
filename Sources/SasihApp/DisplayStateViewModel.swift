@@ -1,4 +1,4 @@
-import BlackoutCore
+import SasihCore
 import Combine
 
 @MainActor

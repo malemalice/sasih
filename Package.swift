@@ -2,27 +2,27 @@
 import PackageDescription
 
 let package = Package(
-    name: "Blackout",
+    name: "Sasih",
     platforms: [.macOS(.v13)],
     targets: [
         .target(
-            name: "BlackoutCore",
-            path: "Sources/BlackoutCore"
+            name: "SasihCore",
+            path: "Sources/SasihCore"
         ),
         .executableTarget(
-            name: "BlackoutSpike",
-            path: "Sources/BlackoutSpike"
+            name: "SasihSpike",
+            path: "Sources/SasihSpike"
         ),
         .executableTarget(
-            name: "BlackoutApp",
-            dependencies: ["BlackoutCore"],
-            path: "Sources/BlackoutApp",
+            name: "SasihApp",
+            dependencies: ["SasihCore"],
+            path: "Sources/SasihApp",
             exclude: ["Resources/Info.plist"]
         ),
         .testTarget(
-            name: "BlackoutCoreTests",
-            dependencies: ["BlackoutCore"],
-            path: "Tests/BlackoutCoreTests"
+            name: "SasihCoreTests",
+            dependencies: ["SasihCore"],
+            path: "Tests/SasihCoreTests"
         ),
     ]
 )

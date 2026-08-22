@@ -1,7 +1,7 @@
-# Product Requirements Document — Blackout
+# Product Requirements Document — Sasih
 
 ## 1. Summary
-Blackout is a macOS menu-bar utility that turns off a MacBook's built-in display on demand — like closing the lid (clamshell mode), but the lid stays open. Keyboard, trackpad, Touch Bar, and speakers keep working normally; only the internal panel goes dark. Requires an external display to be connected (macOS will not allow the only display to be disabled).
+Sasih is a macOS menu-bar utility that turns off a MacBook's built-in display on demand — like closing the lid (clamshell mode), but the lid stays open. Keyboard, trackpad, Touch Bar, and speakers keep working normally; only the internal panel goes dark. Requires an external display to be connected (macOS will not allow the only display to be disabled).
 
 ## 2. Problem
 Real clamshell mode requires closing the lid, which:

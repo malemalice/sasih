@@ -1,5 +1,5 @@
 import Testing
-@testable import BlackoutCore
+@testable import SasihCore
 
 struct SleepWakeDecisionTests {
     @Test func wasOnBeforeSleep_ExternalPresent_DoesNothing() {

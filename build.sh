@@ -1,11 +1,11 @@
 #!/bin/bash
-# Assembles Blackout.app from the SPM build output. Needed because this
+# Assembles Sasih.app from the SPM build output. Needed because this
 # machine has no Xcode.app (only Command Line Tools) — `swift build` alone
 # produces a bare executable, not something Launch Services, LSUIElement,
 # or SMAppService will treat as a real app. See TRD.md §4.
 set -euo pipefail
 
-APP_NAME="Blackout"
+APP_NAME="Sasih"
 BUNDLE="${APP_NAME}.app"
 CONFIG="release"
 SIGN=false
@@ -18,21 +18,21 @@ for arg in "$@"; do
     esac
 done
 
-echo "Building BlackoutApp ($CONFIG)..."
-swift build -c "$CONFIG" --product BlackoutApp
+echo "Building SasihApp ($CONFIG)..."
+swift build -c "$CONFIG" --product SasihApp
 
 rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
 
-cp ".build/$CONFIG/BlackoutApp" "$BUNDLE/Contents/MacOS/$APP_NAME"
-cp "Sources/BlackoutApp/Resources/Info.plist" "$BUNDLE/Contents/Info.plist"
+cp ".build/$CONFIG/SasihApp" "$BUNDLE/Contents/MacOS/$APP_NAME"
+cp "Sources/SasihApp/Resources/Info.plist" "$BUNDLE/Contents/Info.plist"
 
 echo "APPL????" > "$BUNDLE/Contents/PkgInfo"
 
 if [ "$SIGN" = true ]; then
-    IDENTITY="${BLACKOUT_SIGNING_IDENTITY:-}"
+    IDENTITY="${SASIH_SIGNING_IDENTITY:-}"
     if [ -z "$IDENTITY" ]; then
-        echo "error: --sign requires BLACKOUT_SIGNING_IDENTITY to be set to your Developer ID Application identity." >&2
+        echo "error: --sign requires SASIH_SIGNING_IDENTITY to be set to your Developer ID Application identity." >&2
         exit 1
     fi
     echo "Signing with identity: $IDENTITY"

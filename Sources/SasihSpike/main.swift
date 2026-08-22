@@ -59,7 +59,7 @@ func restoreHandler(_ sig: Int32) {
 
 // MARK: - Main
 
-print("Blackout spike — validating SLSConfigureDisplayEnabled on this machine")
+print("Sasih spike — validating SLSConfigureDisplayEnabled on this machine")
 print(String(repeating: "-", count: 60))
 
 let displays = activeDisplays()

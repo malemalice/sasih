@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>Blackout</string>
+    <string>Sasih</string>
     <key>CFBundleIdentifier</key>
-    <string>com.cnt.blackout</string>
+    <string>com.adaptivid.sasih</string>
     <key>CFBundleName</key>
-    <string>Blackout</string>
+    <string>Sasih</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

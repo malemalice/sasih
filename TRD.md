@@ -1,4 +1,4 @@
-# Technical Requirements Document — Blackout
+# Technical Requirements Document — Sasih
 
 ## 1. Overview
 Menu-bar-only macOS app (no Dock icon) built in Swift/SwiftUI or AppKit, distributed as a notarized DMG outside the Mac App Store. Core mechanism: call a private CoreGraphics/SkyLight symbol to enable/disable a display within a standard `CGBeginDisplayConfiguration` transaction.

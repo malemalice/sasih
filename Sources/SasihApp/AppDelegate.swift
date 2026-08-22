@@ -1,5 +1,5 @@
 import AppKit
-import BlackoutCore
+import SasihCore
 import CoreGraphics
 
 private func displayReconfigurationCallback(

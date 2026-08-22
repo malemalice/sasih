@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import BlackoutCore
+@testable import SasihCore
 
 struct DisplayStateDiffTests {
     @Test func noChangeWhenAlreadyAtTarget() {

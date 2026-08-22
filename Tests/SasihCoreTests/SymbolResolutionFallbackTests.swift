@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import BlackoutCore
+@testable import SasihCore
 
 /// A free function with no captures can be used directly as a @convention(c)
 /// function pointer value — this stands in for a real resolved private symbol.

@@ -22,7 +22,7 @@ public final class DisplayIDStore: DisplayIDPersisting {
     public init(
         defaults: UserDefaults = .standard,
         fileURL: URL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".blackout_internal_display_id")
+            .appendingPathComponent(".sasih_internal_display_id")
     ) {
         self.defaults = defaults
         self.fileURL = fileURL
