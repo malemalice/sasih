@@ -10,6 +10,19 @@ Requires an external display to be connected (macOS won't allow the only display
 
 Real clamshell mode (closing the lid) disables your built-in keyboard, trackpad, and Touch Bar, forcing you to use an external keyboard and mouse. If you just want a clean single-monitor setup while keeping your MacBook's own keyboard, trackpad, and speakers, macOS has no first-party way to do that. Sasih is a small, free, single-purpose menu-bar app that does exactly this one thing — nothing more.
 
+### How this compares to "just dim the brightness to 0"
+
+A common manual workaround is to drag the internal display to the side in System Settings and pull its brightness slider down to zero. That's free and works in a pinch, but it only turns off the backlight — the internal panel is still a fully active display as far as macOS is concerned. Sasih instead disables the display itself, the same way clamshell mode does.
+
+| | Dim brightness to 0 | Sasih |
+|---|---|---|
+| Screen appears black | Yes | Yes |
+| Internal panel still counted as an active display | Yes | No — fully disabled |
+| Windows/dialogs can silently open on the dark screen and "go missing" | Yes | No |
+| Menu bar / Spaces / Mission Control span both screens | Yes | No — consolidates onto the external display |
+| One-click toggle | No (multiple manual steps) | Yes |
+| Auto-restores if you unplug the external display | No | Yes |
+
 ## Features
 
 - **One-click toggle** — turn the internal display on or off from the menu bar.
