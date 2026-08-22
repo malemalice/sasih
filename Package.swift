@@ -17,7 +17,7 @@ let package = Package(
             name: "SasihApp",
             dependencies: ["SasihCore"],
             path: "Sources/SasihApp",
-            exclude: ["Resources/Info.plist"]
+            exclude: ["Resources"]
         ),
         .testTarget(
             name: "SasihCoreTests",

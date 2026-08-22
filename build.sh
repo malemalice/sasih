@@ -26,6 +26,9 @@ mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
 
 cp ".build/$CONFIG/SasihApp" "$BUNDLE/Contents/MacOS/$APP_NAME"
 cp "Sources/SasihApp/Resources/Info.plist" "$BUNDLE/Contents/Info.plist"
+cp "Sources/SasihApp/Resources/AppIcon.icns" "$BUNDLE/Contents/Resources/AppIcon.icns"
+cp "Sources/SasihApp/Resources/MenuBarIcon-on.png" "$BUNDLE/Contents/Resources/MenuBarIcon-on.png"
+cp "Sources/SasihApp/Resources/MenuBarIcon-off.png" "$BUNDLE/Contents/Resources/MenuBarIcon-off.png"
 
 echo "APPL????" > "$BUNDLE/Contents/PkgInfo"
 
