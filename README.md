@@ -4,9 +4,19 @@ Turn off your MacBook's built-in display without closing the lid. Keyboard, trac
 
 Requires an external display to be connected (macOS won't allow the only display to be disabled).
 
-## Why
+**[⬇ Download the latest version](https://github.com/malemalice/sasih/releases/latest)**
 
-Real clamshell mode requires closing the lid, which disables the built-in keyboard, trackpad, and Touch Bar — so you need an external keyboard/mouse just to use the machine. If you want a single-monitor-only workflow but still want to use the built-in keyboard, trackpad, and speakers, there's no first-party way to do that. Sasih is a small, free, single-purpose menu-bar app that does just this one thing.
+## Why you'd want this
+
+Real clamshell mode (closing the lid) disables your built-in keyboard, trackpad, and Touch Bar, forcing you to use an external keyboard and mouse. If you just want a clean single-monitor setup while keeping your MacBook's own keyboard, trackpad, and speakers, macOS has no first-party way to do that. Sasih is a small, free, single-purpose menu-bar app that does exactly this one thing — nothing more.
+
+## Features
+
+- **One-click toggle** — turn the internal display on or off from the menu bar.
+- **Everything else keeps working** — keyboard, trackpad, Touch Bar, and speakers are unaffected.
+- **Launch at Login** — optionally have Sasih start automatically when you log in.
+- **Built-in safety nets** (see below) — you can't get stuck staring at a black screen.
+- **Free and lightweight** — no account, no tracking, no background bloat.
 
 ## Safety nets
 
@@ -19,17 +29,31 @@ The one real risk with a feature like this is getting stuck with a black interna
 
 ## Requirements
 
-- Apple Silicon Mac
+- Apple Silicon Mac (M1 or newer)
 - macOS 13 (Ventura) or later
 - An external display connected
 
-## Install
+## Install (2 minutes, no technical steps)
 
-Download the latest DMG from [Releases](https://github.com/malemalice/sasih/releases), open it, and drag Sasih into Applications. Since this isn't distributed through the App Store (see [Why the private API](#why-the-private-api) below), macOS Gatekeeper may ask you to confirm before first launch.
+1. Go to the [Releases page](https://github.com/malemalice/sasih/releases/latest) and download the `.dmg` file under **Assets**.
+2. Open the downloaded `.dmg` file — it opens a small window with the Sasih icon.
+3. Drag **Sasih** into the **Applications** folder shown in that window.
+4. Open **Applications** and double-click **Sasih** to launch it.
+5. Since Sasih isn't distributed through the Mac App Store, macOS Gatekeeper may show a warning the first time you open it. If that happens:
+   - Right-click (or Control-click) the Sasih icon in Applications and choose **Open**, then confirm **Open** in the dialog that appears. You only need to do this once.
 
-## How it works
+That's it — you'll see a moon icon appear in your menu bar at the top of the screen.
 
-The menu bar icon shows a moon: full when the internal display is on, dark when it's off. Click it to toggle. Enable "Launch at Login" from the same menu if you want it always available.
+## How to use it
+
+Look for the moon icon in your menu bar (top-right area of the screen, near the clock/battery icons):
+
+- **Full moon** 🌕 = internal display is **on**.
+- **Dark moon** 🌑 = internal display is **off**.
+
+Click the icon and choose the toggle to switch between on and off. If you want Sasih to start automatically every time you log in, turn on **Launch at Login** from the same menu.
+
+Remember: your external display must stay connected while the internal display is off — Sasih automatically turns the internal display back on if you unplug it, so you're never left without a visible screen.
 
 ## Why the private API
 
