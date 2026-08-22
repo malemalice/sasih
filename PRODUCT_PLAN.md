@@ -45,8 +45,8 @@ Don't add a preferences window, tabs, or onboarding flow for v1 — the entire f
 
 ## 4. Distribution & positioning
 
-- **Free, direct distribution**, notarized DMG via GitHub Releases — matches PRD §6/§8 (no App Store, private API rules that out anyway).
-- **Landing page:** one page, not a site — headline stating the one thing it does, one screenshot/GIF of the menu bar toggle in action, a Download button linking the latest GitHub release, a link to source. No pricing section, no feature grid — there's one feature.
+- **Free, direct distribution**, notarized DMG via GitHub Releases — matches PRD §6/§8 (no App Store, private API rules that out anyway). `README.md` and `dmg.sh` are built; DMG packaging is scripted but unsigned/unnotarized (notarization needs Apple ID credentials — deliberately a manual step, documented in `dmg.sh`'s header comment).
+- **Landing page:** deferred — needs a real screenshot/GIF and app icon (§2) to be worth building; a placeholder page would just need redoing once those exist. Not built yet. One page, not a site, when it happens — headline stating the one thing it does, one screenshot/GIF of the menu bar toggle in action, a Download button linking the latest GitHub release, a link to source. No pricing section, no feature grid — there's one feature.
 - **Launch channels, in order of expected signal quality for this niche:**
   1. Show HN — this audience is exactly the target user (developer, external monitor, wants lid open).
   2. r/macapps
