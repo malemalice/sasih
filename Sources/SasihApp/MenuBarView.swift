@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject var viewModel: DisplayStateViewModel
     @State private var launchAtLoginEnabled = LaunchAtLogin.isEnabled
+    @State private var isCheckingForUpdates = false
 
     private var toggleBinding: Binding<Bool> {
         Binding(
@@ -61,6 +62,11 @@ struct MenuBarView: View {
                     .font(.system(size: 13))
             }
 
+            MenuRow(action: checkForUpdates, isEnabled: !isCheckingForUpdates) {
+                Text(isCheckingForUpdates ? "Checking…" : "Check for Updates…")
+                    .font(.system(size: 13))
+            }
+
             MenuRow(action: openSupportPage) {
                 Text("Support Sasih")
                     .font(.system(size: 13))
@@ -90,6 +96,42 @@ struct MenuBarView: View {
     private func openSupportPage() {
         guard let url = URL(string: "https://ko-fi.com/malemalice") else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func checkForUpdates() {
+        guard !isCheckingForUpdates else { return }
+        isCheckingForUpdates = true
+        Task {
+            let result = await UpdateChecker.check()
+            isCheckingForUpdates = false
+            presentUpdateAlert(for: result)
+        }
+    }
+
+    private func presentUpdateAlert(for result: UpdateCheckResult) {
+        let alert = NSAlert()
+        switch result {
+        case .upToDate(let current):
+            alert.messageText = "You're Up to Date"
+            alert.informativeText = "Sasih \(current) is the latest version."
+            alert.addButton(withTitle: "OK")
+        case .updateAvailable(let current, let latest, let url):
+            alert.messageText = "Update Available"
+            alert.informativeText = "Sasih \(latest) is available — you have \(current)."
+            alert.addButton(withTitle: "Download")
+            alert.addButton(withTitle: "Later")
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        case .failed(let message):
+            alert.messageText = "Couldn't Check for Updates"
+            alert.informativeText = message
+            alert.addButton(withTitle: "OK")
+        }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     private var header: some View {
@@ -148,6 +190,7 @@ struct MenuBarView: View {
 /// menu items behave — plain SwiftUI Buttons don't do this on their own.
 private struct MenuRow<Content: View>: View {
     let action: () -> Void
+    var isEnabled: Bool = true
     @ViewBuilder var content: () -> Content
     @State private var isHovering = false
 
@@ -159,10 +202,11 @@ private struct MenuRow<Content: View>: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
-            .background(isHovering ? Color.primary.opacity(0.08) : Color.clear)
+            .background(isHovering && isEnabled ? Color.primary.opacity(0.08) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
         .onHover { isHovering = $0 }
     }
 }
