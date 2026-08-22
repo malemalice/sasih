@@ -61,6 +61,11 @@ struct MenuBarView: View {
                     .font(.system(size: 13))
             }
 
+            MenuRow(action: openSupportPage) {
+                Text("Support Sasih")
+                    .font(.system(size: 13))
+            }
+
             MenuRow(action: { NSApplication.shared.terminate(nil) }) {
                 Text("Quit Sasih")
                     .font(.system(size: 13))
@@ -80,6 +85,11 @@ struct MenuBarView: View {
         )
         NSApplication.shared.activate(ignoringOtherApps: true)
         NSApplication.shared.orderFrontStandardAboutPanel(options: [.credits: credits])
+    }
+
+    private func openSupportPage() {
+        guard let url = URL(string: "https://ko-fi.com/malemalice") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private var header: some View {
