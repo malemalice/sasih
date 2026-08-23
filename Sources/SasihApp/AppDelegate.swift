@@ -90,6 +90,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             self?.displayManager.handleWake()
             self?.viewModel.refresh()
+            // A real system sleep/wake can leave the Touch Bar's rendering
+            // session stuck blank (still touch-responsive) the same way a
+            // manual display toggle can — nudge it regardless of which way
+            // handleWake() resolved the internal display's state.
+            TouchBarRecovery.nudge()
         }
     }
 }
