@@ -10,18 +10,18 @@ Requires an external display to be connected (macOS won't allow the only display
 
 Real clamshell mode (closing the lid) disables your built-in keyboard, trackpad, and Touch Bar, forcing you to use an external keyboard and mouse. If you just want a clean single-monitor setup while keeping your MacBook's own keyboard, trackpad, and speakers, macOS has no first-party way to do that. Sasih is a small, free, single-purpose menu-bar app that does exactly this one thing — nothing more.
 
-### How this compares to "just dim the brightness to 0"
+### How this compares to manual workarounds
 
-A common manual workaround is to drag the internal display to the side in System Settings and pull its brightness slider down to zero. That's free and works in a pinch, but it only turns off the backlight — the internal panel is still a fully active display as far as macOS is concerned. Sasih instead disables the display itself, the same way clamshell mode does.
+A common manual workaround is to drag the internal display to the side in System Settings and pull its brightness slider down to zero. A more refined version of the same trick: briefly turn on Mirror Displays, switch back to extended mode with the external set as the *main* display (this moves the menu bar over), then dim the internal panel to zero. Both are free and work in a pinch, but neither actually turns the internal display off — it only kills the backlight. As far as macOS is concerned, the panel is still a fully active display. Sasih instead disables the display itself, the same way clamshell mode does.
 
-| | Dim brightness to 0 | Sasih |
-|---|---|---|
-| Screen appears black | Yes | Yes |
-| Internal panel still counted as an active display | Yes | No — fully disabled |
-| Windows/dialogs can silently open on the dark screen and "go missing" | Yes | No |
-| Menu bar / Spaces / Mission Control span both screens | Yes | No — consolidates onto the external display |
-| One-click toggle | No (multiple manual steps) | Yes |
-| Auto-restores if you unplug the external display | No | Yes |
+| | Dim brightness to 0 | Mirror → extended → dim to 0 | Sasih |
+|---|---|---|---|
+| Screen appears black | Yes | Yes | Yes |
+| Internal panel still counted as an active display | Yes | Yes | No — fully disabled |
+| Windows/dialogs can silently open on the dark screen and "go missing" | Yes | Yes | No |
+| Menu bar / Spaces / Mission Control span both screens | Yes | No — menu bar moves to external | No — consolidates onto the external display |
+| One-click toggle | No (multiple manual steps) | No (more manual steps than the simple version) | Yes |
+| Auto-restores if you unplug the external display | No | No | Yes |
 
 ## Features
 
@@ -67,6 +67,10 @@ Look for the moon icon in your menu bar (top-right area of the screen, near the 
 Click the icon and choose the toggle to switch between on and off. If you want Sasih to start automatically every time you log in, turn on **Launch at Login** from the same menu.
 
 Remember: your external display must stay connected while the internal display is off — Sasih automatically turns the internal display back on if you unplug it, so you're never left without a visible screen.
+
+### Touch Bar note
+
+On the 13" M1/M2 MacBook Pro — the only Apple Silicon Macs with a Touch Bar — the private API Sasih uses can leave the Touch Bar blank (still touch-responsive, just not rendering) after re-enabling the internal display. Sasih automatically detects and corrects this with a brief display sleep/wake nudge right after turning the display back on — you shouldn't notice it happening. See `TRD.md` for the technical detail.
 
 ## Why the private API
 

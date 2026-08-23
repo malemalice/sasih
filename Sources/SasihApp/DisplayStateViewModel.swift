@@ -22,7 +22,11 @@ final class DisplayStateViewModel: ObservableObject {
     }
 
     func toggle() {
+        let wasOff = manager.isInternalDisplayOff
         manager.toggle()
         refresh()
+        if wasOff && !isInternalDisplayOff {
+            TouchBarRecovery.nudge()
+        }
     }
 }

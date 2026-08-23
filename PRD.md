@@ -41,6 +41,7 @@ The person building and using it — a developer/power user with a MacBook conne
 ## 8. Risks (product-level; see TRD for technical detail)
 - The mechanism relies on an undocumented private macOS API. Apple could change or remove it in a future macOS release, breaking the app until updated. Mitigated by: no other viable approach exists for this feature (confirmed via reference implementations from other shipping apps); accept and monitor across macOS updates.
 - Because it uses a private API, this app can never ship on the Mac App Store — acceptable, already decided (direct distribution).
+- **Touch Bar (on the 13" M1/M2 MacBook Pro, the only Apple Silicon Touch Bar models) can go blank — though still touch-responsive — after a disable→enable cycle.** Previously required a full logout/login to fix; now mitigated automatically in-app via a display sleep/wake nudge triggered right after re-enabling the internal display (see TRD §6 for detail and how it was verified). User story 6 is met in practice, though the underlying WindowServer-level cause is still unconfirmed — treat this as a working mitigation, not a guaranteed-permanent fix.
 
 ## 9. Open questions
 - Minimum macOS version to support (mechanism confirmed working on Apple Silicon + macOS 13/Ventura and later — see TRD).
