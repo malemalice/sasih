@@ -22,6 +22,7 @@ private func displayReconfigurationCallback(
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let displayManager: DisplayManager
     let viewModel: DisplayStateViewModel
+    private let touchBarRecovery: TouchBarRecovering
 
     private var backstopTimer: Timer?
 
@@ -32,7 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             idStore: DisplayIDStore()
         )
         self.displayManager = manager
-        self.viewModel = DisplayStateViewModel(manager: manager)
+        self.touchBarRecovery = TouchBarRecovery()
+        self.viewModel = DisplayStateViewModel(manager: manager, touchBarRecovery: touchBarRecovery)
         super.init()
     }
 
@@ -94,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // session stuck blank (still touch-responsive) the same way a
             // manual display toggle can — nudge it regardless of which way
             // handleWake() resolved the internal display's state.
-            TouchBarRecovery.nudge()
+            self?.touchBarRecovery.nudge()
         }
     }
 }

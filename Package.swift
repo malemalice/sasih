@@ -24,5 +24,10 @@ let package = Package(
             dependencies: ["SasihCore"],
             path: "Tests/SasihCoreTests"
         ),
+        .testTarget(
+            name: "SasihAppTests",
+            dependencies: ["SasihApp", "SasihCore"],
+            path: "Tests/SasihAppTests"
+        ),
     ]
 )

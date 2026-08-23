@@ -4,12 +4,14 @@ import Combine
 @MainActor
 final class DisplayStateViewModel: ObservableObject {
     let manager: DisplayManager
+    private let touchBarRecovery: TouchBarRecovering
     @Published private(set) var isInternalDisplayOff: Bool
     @Published private(set) var lastError: String?
     @Published private(set) var hasExternalDisplay: Bool
 
-    init(manager: DisplayManager) {
+    init(manager: DisplayManager, touchBarRecovery: TouchBarRecovering = TouchBarRecovery()) {
         self.manager = manager
+        self.touchBarRecovery = touchBarRecovery
         self.isInternalDisplayOff = manager.isInternalDisplayOff
         self.lastError = manager.lastError
         self.hasExternalDisplay = manager.externalDisplayCount > 0
@@ -26,7 +28,7 @@ final class DisplayStateViewModel: ObservableObject {
         manager.toggle()
         refresh()
         if wasOff && !isInternalDisplayOff {
-            TouchBarRecovery.nudge()
+            touchBarRecovery.nudge()
         }
     }
 }
