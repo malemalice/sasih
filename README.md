@@ -1,6 +1,6 @@
 # Sasih
 
-Turn off your MacBook's built-in display without closing the lid. Keyboard, trackpad, Touch Bar, and speakers keep working exactly as before — only the internal panel goes dark.
+Blackout your MacBook's screen — no lid-closing required. Keyboard, trackpad, Touch Bar, and speakers keep working exactly as before — only the internal panel goes dark.
 
 Requires an external display to be connected (macOS won't allow the only display to be disabled).
 
@@ -25,7 +25,7 @@ A common manual workaround is to drag the internal display to the side in System
 
 ## Features
 
-- **One-click toggle** — turn the internal display on or off from the menu bar.
+- **One-click Blackout toggle** — turn the internal display on or off from the menu bar.
 - **Everything else keeps working** — keyboard, trackpad, Touch Bar, and speakers are unaffected.
 - **Launch at Login** — optionally have Sasih start automatically when you log in.
 - **Built-in safety nets** (see below) — you can't get stuck staring at a black screen.
@@ -61,12 +61,12 @@ That's it — you'll see a moon icon appear in your menu bar at the top of the s
 
 Look for the moon icon in your menu bar (top-right area of the screen, near the clock/battery icons):
 
-- **Full moon** 🌕 = internal display is **on**.
-- **Dark moon** 🌑 = internal display is **off**.
+- **Full moon** 🌕 = **Standing by** (internal display is on).
+- **Dark moon** 🌑 = **Blackout active** (internal display is off).
 
-Click the icon and choose the toggle to switch between on and off. If you want Sasih to start automatically every time you log in, turn on **Launch at Login** from the same menu.
+Click the icon and use the **Blackout** toggle to switch between the two. Turn on **Auto-Blackout** if you want it to re-engage automatically whenever your external display reconnects, and **Launch at Login** if you want Sasih to start automatically when you log in.
 
-Remember: your external display must stay connected while the internal display is off — Sasih automatically turns the internal display back on if you unplug it, so you're never left without a visible screen.
+Remember: your external display must stay connected while Blackout is active — Sasih automatically turns the internal display back on if you unplug it, so you're never left without a visible screen.
 
 ### Touch Bar note
 
