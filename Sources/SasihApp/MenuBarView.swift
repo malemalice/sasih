@@ -20,7 +20,7 @@ struct MenuBarView: View {
     }
 
     private var statusCaption: String {
-        viewModel.isInternalDisplayOff ? "Built-in display is off" : "Built-in display is on"
+        viewModel.isInternalDisplayOff ? "Blackout active" : "Standing by"
     }
 
     var body: some View {
@@ -87,7 +87,7 @@ struct MenuBarView: View {
 
     private func showAboutPanel() {
         let credits = NSAttributedString(
-            string: "Turn off your MacBook's built-in display without closing the lid.",
+            string: "Blackout your MacBook's screen — no lid-closing required.",
             attributes: [
                 .font: NSFont.systemFont(ofSize: 11),
                 .foregroundColor: NSColor.secondaryLabelColor,
@@ -161,13 +161,18 @@ struct MenuBarView: View {
 
     private var displayRow: some View {
         HStack {
-            Text("Built-in Display")
+            Text("Blackout")
                 .font(.system(size: 13))
             Spacer()
             Toggle("", isOn: toggleBinding)
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .disabled(toggleDisabled)
+                .help(
+                    viewModel.isInternalDisplayOff
+                        ? "Turns your MacBook's screen back on."
+                        : "Turns off your MacBook's screen right away — no need to close the lid."
+                )
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -176,14 +181,15 @@ struct MenuBarView: View {
     private var autoRevertRow: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text("Auto-Revert on Reconnect")
+                Text("Auto-Blackout")
                     .font(.system(size: 13))
                 Spacer()
                 Toggle("", isOn: $viewModel.autoRevertOnReconnectEnabled)
                     .labelsHidden()
                     .toggleStyle(.switch)
+                    .help("When on, your built-in display switches back off by itself as soon as your external display reconnects — no manual toggling needed.")
             }
-            Text("Turn the built-in display back off automatically once your external display reconnects.")
+            Text("Re-blackout automatically when your external display reconnects.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
@@ -199,6 +205,7 @@ struct MenuBarView: View {
             Toggle("", isOn: $launchAtLoginEnabled)
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .help("Opens Sasih automatically in the background when you log in to your Mac.")
                 .onChange(of: launchAtLoginEnabled) { newValue in
                     LaunchAtLogin.setEnabled(newValue)
                 }
