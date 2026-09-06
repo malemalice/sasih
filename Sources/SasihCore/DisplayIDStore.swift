@@ -9,6 +9,8 @@ public protocol DisplayIDPersisting {
     func load() -> CGDirectDisplayID?
     func saveOffState(_ isOff: Bool)
     func loadOffState() -> Bool
+    func saveAutoRevertOnReconnect(_ enabled: Bool)
+    func loadAutoRevertOnReconnect() -> Bool
 }
 
 /// Real implementation: UserDefaults as the primary store, with a plain-text
@@ -18,6 +20,7 @@ public final class DisplayIDStore: DisplayIDPersisting {
     private let fileURL: URL
     private let idKey = "BackupInternalDisplayID"
     private let offStateKey = "IsInternalDisplayOff"
+    private let autoRevertKey = "AutoRevertInternalOffOnReconnect"
 
     public init(
         defaults: UserDefaults = .standard,
@@ -51,5 +54,17 @@ public final class DisplayIDStore: DisplayIDPersisting {
 
     public func loadOffState() -> Bool {
         defaults.bool(forKey: offStateKey)
+    }
+
+    public func saveAutoRevertOnReconnect(_ enabled: Bool) {
+        defaults.set(enabled, forKey: autoRevertKey)
+    }
+
+    /// Defaults to `true` (opt-out preference) — most users want the app to
+    /// restore their off-state automatically once the external display they
+    /// were relying on shows back up.
+    public func loadAutoRevertOnReconnect() -> Bool {
+        guard defaults.object(forKey: autoRevertKey) != nil else { return true }
+        return defaults.bool(forKey: autoRevertKey)
     }
 }

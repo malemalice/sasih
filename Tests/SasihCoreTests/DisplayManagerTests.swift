@@ -22,11 +22,14 @@ private final class FakeInfoProvider: DisplayInfoProviding {
 private final class FakeIDStore: DisplayIDPersisting {
     var storedID: CGDirectDisplayID?
     var storedOffState = false
+    var storedAutoRevert = true
 
     func save(_ id: CGDirectDisplayID) { storedID = id }
     func load() -> CGDirectDisplayID? { storedID }
     func saveOffState(_ isOff: Bool) { storedOffState = isOff }
     func loadOffState() -> Bool { storedOffState }
+    func saveAutoRevertOnReconnect(_ enabled: Bool) { storedAutoRevert = enabled }
+    func loadAutoRevertOnReconnect() -> Bool { storedAutoRevert }
 }
 
 final class DisplayManagerTests {
@@ -129,6 +132,61 @@ final class DisplayManagerTests {
         manager.handleWake()
 
         #expect(manager.isInternalDisplayOff == false)
+    }
+
+    @Test func handleWakeLeavesOnFlagsFallbackForReconciliation() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        infoProvider.online = [1: true] // external gone by the time we wake
+
+        manager.handleWake()
+        #expect(manager.isInternalDisplayOff == false)
+
+        // External reconnects later — auto-revert should reapply "off".
+        infoProvider.online = [1: true, 2: false]
+        manager.performEmergencyCheckIfNeeded()
+
+        #expect(manager.isInternalDisplayOff == true)
+        #expect(configurer.calls.last?.enabled == false)
+    }
+
+    @Test func reconciliationDoesNothingWhenAutoRevertDisabled() {
+        idStore.storedAutoRevert = false
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        infoProvider.online = [1: true]
+        manager.handleWake()
+        configurer.calls.removeAll()
+
+        infoProvider.online = [1: true, 2: false]
+        manager.performEmergencyCheckIfNeeded()
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func reconciliationDoesNothingWhenInternalOnIsNotFallback() {
+        // User manually left it on — no fallback flag set — reconnect must
+        // not fight a deliberate user choice.
+        infoProvider.online = [1: true, 2: false]
+        manager.performEmergencyCheckIfNeeded()
+        #expect(configurer.calls.isEmpty)
+        #expect(manager.isInternalDisplayOff == false)
+    }
+
+    @Test func manualToggleClearsFallbackFlag() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        infoProvider.online = [1: true]
+        manager.handleWake() // sets fallback flag, leaves internal on
+
+        manager.toggle() // user manually disables again — refused, no external
+        infoProvider.online = [1: true, 2: false]
+        configurer.calls.removeAll()
+        manager.performEmergencyCheckIfNeeded()
+
+        // Flag was cleared by the manual toggle, so reconnect does nothing.
+        #expect(configurer.calls.isEmpty)
     }
 
     @Test func failedConfigureCallSurfacesError() {

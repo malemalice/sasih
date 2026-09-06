@@ -22,6 +22,20 @@ public final class DisplayManager {
 
     private var cachedInternalDisplayID: CGDirectDisplayID?
 
+    /// True when the internal display is currently on only because we fell
+    /// back to it (no external present when we needed to decide), not because
+    /// the user chose it. Drives whether `performEmergencyCheckIfNeeded` may
+    /// automatically turn it off again once an external display reappears.
+    /// In-memory only — a fresh launch has no fallback to reconcile.
+    private var internalOnIsFallback = false
+
+    /// User preference: automatically restore "internal off" once an external
+    /// display reconnects after we fell back to the internal display.
+    public var autoRevertOnReconnectEnabled: Bool {
+        get { idStore.loadAutoRevertOnReconnect() }
+        set { idStore.saveAutoRevertOnReconnect(newValue) }
+    }
+
     public init(
         configurer: DisplayConfiguring,
         infoProvider: DisplayInfoProviding,
@@ -100,6 +114,9 @@ public final class DisplayManager {
 
     public func toggle() {
         logger.notice("toggle: isInternalDisplayOff=\(self.isInternalDisplayOff, privacy: .public) (before)")
+        // A manual toggle is always a deliberate choice — it overrides
+        // whatever fallback state we were tracking.
+        internalOnIsFallback = false
         if isInternalDisplayOff {
             enableInternalDisplay()
         } else {
@@ -110,6 +127,9 @@ public final class DisplayManager {
     /// Call periodically (safety-net timer) and on every display-reconfiguration
     /// event. If the internal display is off and no external is present, restore
     /// immediately — this is the top-priority correctness guarantee of the app.
+    /// Also the counterpart reconciliation: if the internal display is only on
+    /// because we fell back to it, and an external has since reappeared, turn
+    /// it back off — subject to the user's auto-revert preference.
     ///
     /// Note on the zero-count case: an empty online list is the *intended*
     /// signature of a genuine unplug (see CGDisplayInfoProvider — WindowServer
@@ -117,20 +137,28 @@ public final class DisplayManager {
     /// occur transiently mid-reconfiguration, so the logging below records the
     /// count that drove the decision.
     public func performEmergencyCheckIfNeeded() {
-        guard isInternalDisplayOff else { return }
-
         // One snapshot, so the logged list and the count that drives the
         // decision below can never disagree about which instant they describe.
         let onlineIDs = infoProvider.onlineDisplayIDs()
         let externalCount = onlineIDs.filter { !infoProvider.isBuiltin($0) }.count
-        logger.notice("performEmergencyCheckIfNeeded: isInternalDisplayOff=true onlineIDs=\(onlineIDs, privacy: .public) externalCount=\(externalCount, privacy: .public) cachedInternalDisplayID=\(String(describing: self.cachedInternalDisplayID), privacy: .public)")
+        logger.notice("performEmergencyCheckIfNeeded: isInternalDisplayOff=\(self.isInternalDisplayOff, privacy: .public) internalOnIsFallback=\(self.internalOnIsFallback, privacy: .public) onlineIDs=\(onlineIDs, privacy: .public) externalCount=\(externalCount, privacy: .public) cachedInternalDisplayID=\(String(describing: self.cachedInternalDisplayID), privacy: .public)")
 
-        guard externalCount == 0 else {
-            logger.notice("performEmergencyCheckIfNeeded: external present — nothing to do")
+        if isInternalDisplayOff {
+            guard externalCount == 0 else {
+                logger.notice("performEmergencyCheckIfNeeded: external present — nothing to do")
+                return
+            }
+            logger.notice("performEmergencyCheckIfNeeded: no external present — restoring internal")
+            internalOnIsFallback = true
+            enableInternalDisplay()
             return
         }
-        logger.notice("performEmergencyCheckIfNeeded: no external present — restoring internal")
-        enableInternalDisplay()
+
+        guard internalOnIsFallback, autoRevertOnReconnectEnabled, externalCount > 0 else { return }
+        logger.notice("performEmergencyCheckIfNeeded: external reconnected after fallback — reapplying off")
+        if disableInternalDisplay() {
+            internalOnIsFallback = false
+        }
     }
 
     /// Call on wake from sleep. Reads the persisted off-state rather than a
@@ -147,6 +175,7 @@ public final class DisplayManager {
         case .leaveOn:
             isInternalDisplayOff = false
             idStore.saveOffState(false)
+            internalOnIsFallback = true
         case .doNothing:
             break
         }

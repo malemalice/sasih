@@ -25,4 +25,12 @@ struct DisplayIDStoreTests {
     @Test func offStateRoundTrip() {
         #expect(DisplayIDStoreScenario.offStateRoundTrip())
     }
+
+    @Test func autoRevertDefaultsToTrue() {
+        #expect(DisplayIDStoreScenario.autoRevertDefaultsToTrue())
+    }
+
+    @Test func autoRevertRoundTrip() {
+        #expect(DisplayIDStoreScenario.autoRevertRoundTrip())
+    }
 }

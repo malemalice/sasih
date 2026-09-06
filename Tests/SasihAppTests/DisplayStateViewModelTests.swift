@@ -17,10 +17,13 @@ private final class FakeInfoProvider: DisplayInfoProviding {
 private final class FakeIDStore: DisplayIDPersisting {
     var storedID: CGDirectDisplayID?
     var storedOffState = false
+    var storedAutoRevert = true
     func save(_ id: CGDirectDisplayID) { storedID = id }
     func load() -> CGDirectDisplayID? { storedID }
     func saveOffState(_ isOff: Bool) { storedOffState = isOff }
     func loadOffState() -> Bool { storedOffState }
+    func saveAutoRevertOnReconnect(_ enabled: Bool) { storedAutoRevert = enabled }
+    func loadAutoRevertOnReconnect() -> Bool { storedAutoRevert }
 }
 
 private final class FakeTouchBarRecovery: TouchBarRecovering, @unchecked Sendable {

@@ -65,4 +65,17 @@ enum DisplayIDStoreScenario {
             return store.loadOffState() == false
         }
     }
+
+    static func autoRevertDefaultsToTrue() -> Bool {
+        withStore { store, _ in store.loadAutoRevertOnReconnect() == true }
+    }
+
+    static func autoRevertRoundTrip() -> Bool {
+        withStore { store, _ in
+            store.saveAutoRevertOnReconnect(false)
+            guard store.loadAutoRevertOnReconnect() == false else { return false }
+            store.saveAutoRevertOnReconnect(true)
+            return store.loadAutoRevertOnReconnect() == true
+        }
+    }
 }

@@ -52,6 +52,10 @@ struct MenuBarView: View {
 
             Divider()
 
+            autoRevertRow
+
+            Divider()
+
             launchAtLoginRow
 
             Divider()
@@ -164,6 +168,24 @@ struct MenuBarView: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .disabled(toggleDisabled)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private var autoRevertRow: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text("Auto-Revert on Reconnect")
+                    .font(.system(size: 13))
+                Spacer()
+                Toggle("", isOn: $viewModel.autoRevertOnReconnectEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            Text("Turn the built-in display back off automatically once your external display reconnects.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
