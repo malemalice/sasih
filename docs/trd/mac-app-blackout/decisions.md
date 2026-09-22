@@ -1,0 +1,22 @@
+# Decision Log — mac-app-blackout (Sasih)
+
+> Append-only. New decisions go at the bottom with date, decision, rationale, and status.
+> Superseded decisions are struck through, not deleted.
+
+| Date | Decision | Rationale | Status |
+|---|---|---|---|
+| (pre-2026-08-22) | Use private `SLSConfigureDisplayEnabled` (fallback `CGSConfigureDisplayEnabled`) via `dlopen`/`dlsym` | The "correct" clamshell API requires an entitlement AMFI won't grant third parties; this symbol needs no entitlement and is confirmed working by a reference implementation | Accepted |
+| (pre-2026-08-22) | Apple Silicon + macOS 13+ only | Same constraint Lunar's equivalent feature targets; reference implementation tested there; Intel/pre-Ventura display stack unverified | Accepted |
+| (pre-2026-08-22) | Direct notarized DMG distribution; never Mac App Store | Private API is an automatic App Review rejection; permanent product decision, not a v1 shortcut | Accepted |
+| (pre-2026-08-22) | App is unsandboxed | Sandbox + `dlopen` of a private framework doesn't work, and sandboxing is irrelevant outside the App Store | Accepted |
+| (pre-2026-08-22) | Menu-bar-only (`LSUIElement = true`), no Dock icon, no settings window | One feature, one toggle; a preferences window would be over-building | Accepted |
+| (pre-2026-08-22) | Persist internal display ID to UserDefaults **and** a backup file | After disable, the display can't be re-identified from `NSScreen`; one store being wiped/corrupt must not strand the user | Accepted |
+| (pre-2026-08-22) | Zero third-party SwiftPM dependencies | Deliberately tiny utility; supply-chain + maintenance surface; all needs covered by system frameworks | Accepted |
+| (2026-08-22/23) | Name: **Sasih** (Sundanese/Kawi: "moon"), bundle ID `com.adaptivid.sasih` | Fits the author's Sundanese-nature naming convention; matches the moon menu-bar metaphor (`moon.fill`: waning off, waxing on). Rejected: Gerhana (eclipse), Poék (dark), Halimun (mist) | Accepted |
+| (2026-08-23) | Touch Bar blank-panel mitigation via `pmset displaysleepnow` + `caffeinate` nudge after re-enable | Only confirmed non-disruptive fix (vs. logout/login); `killall ControlStrip`/`TouchBarServer` proven ineffective | Accepted (working mitigation, root cause unconfirmed) |
+| (2026-08-23) | Extend the Touch Bar nudge to the sleep/wake path too | Same blank-Touch-Bar symptom can occur after automatic re-enable | Superseded 2026-08-26 |
+| (2026-08-26) | Do **not** run the Touch Bar nudge on the wake-from-sleep path (reverted the 2026-08-23 change) | The nudge synthesizes a display sleep/wake cycle which feeds our own reconfiguration callbacks mid-wake; nudge stays on the manual-toggle path only. Known trade-off: after an automatic re-enable the Touch Bar may stay blank until one manual toggle | Accepted |
+| (2026-09-06) | Rename user-facing "Turn off built-in display" → "Blackout"; add "Auto-Blackout" auto-revert preference (default on) | Clearer product language; auto-revert covers the unplug→replug flow without a manual toggle | Accepted |
+| (2026-09-22) | Adopt the runtut AI harness (AGENTS.md routing, docs tree, roles, playbooks, exec-plans) | Give future AI-assisted sessions a single read-order and explicit gates | Accepted |
+| (2026-09-22) | Recorded off-state reconciles to observed reality: an internal panel absent from the online display list is ground truth — `disableInternalDisplay()` records success without a hardware call, `performEmergencyCheckIfNeeded()` heals diverged state before reapplying, and `handleWake()` `.leaveOn` verifies/restores the panel, keeping "off" recorded if the restore fails | Field-evidenced stuck state (2026-09-21): `internalOnIsFallback` never cleared because reapply-off was refused forever as "last active display" — the guard was right, the recorded state was wrong | Accepted |
+| (2026-09-22) | Blackout switch is intent-based: reads `isInternalDisplayOff` directly (on = Blackout active) and writes through `DisplayStateViewModel.setBlackoutActive(_:)`, which no-ops on matching values | The "Blackout" rename (2026-09-06) left the binding inverted — switch could show OFF while blackout was active; intent-based writes also neutralise stale clicks after an auto-revert | Accepted |
