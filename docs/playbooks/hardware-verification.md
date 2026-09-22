@@ -45,6 +45,9 @@ Record pass/fail per row, plus macOS version and app build. "Assumed from code" 
 | 15 | **Auto-Blackout** (added 2026-09-06): toggle off → unplug external (auto-restore) → replug external, preference **on** | Internal display switches back off by itself once the external reconnects; `internalOnIsFallback` reconciliation path exercised |
 | 16 | **Auto-Blackout off**: same sequence as row 15 | Internal display stays on after reconnect; no automatic re-disable |
 | 17 | **Touch Bar (13" M1/M2 only)**: toggle off, then on | Touch Bar renders normally after the automatic nudge (blank-but-responsive Touch Bar = fail → see `docs/trd/mac-app-blackout/constraints-integrations.md` §5) |
+| 18 | **Display sleep with blackout active** (added 2026-09-22): toggle off with external connected, run `pmset displaysleepnow`, wait >10s (backstop ticks), then wake the displays | Blackout survives: internal stays off after wake; no unintended restore happens while the screens are asleep |
+| 19 | **Undock / ghost stress** (added 2026-09-22): toggle off with external connected, close the lid, unplug the external, open the lid elsewhere | Internal display restores within a few seconds, even if WindowServer transiently still lists the removed external |
+| 20 | **Mirrored external** (added 2026-09-22): mirror the external and the built-in, then attempt to toggle off | Never leaves a black-only setup: blackout either applies while the mirrored image stays drawable, or the toggle is refused with the connect-a-display hint — record which |
 
 ## 3. Which rows a change requires
 
@@ -52,13 +55,14 @@ Record pass/fail per row, plus macOS version and app build. "Assumed from code" 
 |---|---|
 | `DisplayManager` / guards / state diff / persisted keys | 1–13 (all core toggle + safety paths) |
 | Reconfiguration callback / backstop timer | 3, 4, 14 (+ 1, 2) |
-| Sleep/wake handling | 8, 9 |
+| Sleep/wake handling | 8, 9, 18 |
 | Restore-on-launch / restore-before-quit | 5, 6, 7, 10, 12 |
 | Launch at Login (`SMAppService`) | 12 |
 | Auto-Blackout preference | 15, 16 (+ 3, 4) |
+| External-presence predicate (usable/drawable external, screen-sleep deferral) | 1–4, 8, 9, 13, 15, 16, 18, 19, 20 |
 | Touch Bar recovery | 17 (+ 1, 2) |
 | Menu bar UI only (copy/layout) | 1, 2, 13 visual checks |
-| Private SkyLight symbol/transaction | 1–17 — all of them |
+| Private SkyLight symbol/transaction | 1–20 — all of them |
 
 ## 4. Compatibility re-verification
 

@@ -31,5 +31,5 @@ There is intentionally **no** backup file for `IsInternalDisplayOff` — the off
 |---|---|---|---|
 | `DisplayStateViewModel.isInternalDisplayOff` | `@Published Bool` | `manager` | Drives menu bar icon + toggle |
 | `DisplayStateViewModel.lastError` | `@Published String?` | `manager` | Error caption row |
-| `DisplayStateViewModel.hasExternalDisplay` | `@Published Bool` | `manager.externalDisplayCount > 0` | Drives disabled state of the toggle |
+| `DisplayStateViewModel.hasExternalDisplay` | `@Published Bool` | `manager.usableExternalDisplayCount > 0` | Drives disabled state of the toggle |
 | `DisplayStateViewModel.autoRevertOnReconnectEnabled` | `@Published Bool` (didSet writes through) | `manager` | Auto-Blackout toggle |

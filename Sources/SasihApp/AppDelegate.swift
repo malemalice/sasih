@@ -33,6 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var backstopTimer: Timer?
 
+    /// True while macOS has the screens in display sleep. No display is
+    /// drawable in that state (including a perfectly healthy external), so
+    /// emergency checks are deferred until the screens wake — otherwise every
+    /// display-sleep cycle would read as "no external present" and silently
+    /// cancel blackout.
+    private var screensAreAsleep = false
+
     override init() {
         let manager = DisplayManager(
             configurer: PrivateAPIDisplayConfigurer(),
@@ -74,6 +81,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(handleWake),
             name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleScreensDidSleep),
+            name: NSWorkspace.screensDidSleepNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleScreensDidWake),
+            name: NSWorkspace.screensDidWakeNotification,
             object: nil
         )
         registerDiagnosticObservers()
@@ -119,8 +138,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func handleDisplayReconfiguration() {
-        displayManager.performEmergencyCheckIfNeeded()
+        displayManager.performEmergencyCheckIfNeeded(screensAreAsleep: screensAreAsleep)
         viewModel.refresh()
+    }
+
+    @objc private func handleScreensDidSleep() {
+        screensAreAsleep = true
+        logger.notice("screensDidSleepNotification: deferring emergency checks until screens wake")
+    }
+
+    @objc private func handleScreensDidWake() {
+        screensAreAsleep = false
+        logger.notice("screensDidWakeNotification: re-evaluating display state")
+        // Give macOS a moment to finish waking the displays before reading the
+        // active list; the reconfiguration callbacks firing around this time
+        // pick the state up as well.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.handleDisplayReconfiguration()
+        }
     }
 
     @objc private func logWillSleep() {
@@ -137,6 +172,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleWake() {
         logger.notice("didWakeNotification received")
+        // Defensive: screensDidWake usually precedes this, but never leave the
+        // deferral flag stuck on across a system wake.
+        screensAreAsleep = false
         // Give macOS a moment to finish its own display reconfiguration after
         // wake (it re-enables all displays as part of that) before re-applying
         // our state on top of it.

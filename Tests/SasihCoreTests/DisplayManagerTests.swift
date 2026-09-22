@@ -15,7 +15,12 @@ private final class FakeConfigurer: DisplayConfiguring {
 private final class FakeInfoProvider: DisplayInfoProviding {
     var online: [CGDirectDisplayID: Bool] = [:] // id -> isBuiltin
 
+    /// IDs reported as active/drawable. `nil` means "every online display is
+    /// drawable", so tests that only configure `online` keep their meaning.
+    var active: Set<CGDirectDisplayID>?
+
     func onlineDisplayIDs() -> [CGDirectDisplayID] { Array(online.keys) }
+    func activeDisplayIDs() -> [CGDirectDisplayID] { Array(active ?? Set(online.keys)) }
     func isBuiltin(_ id: CGDirectDisplayID) -> Bool { online[id] ?? false }
 }
 
@@ -284,5 +289,120 @@ final class DisplayManagerTests {
         #expect(manager.disableInternalDisplay() == false)
         #expect(manager.lastError == "Failed to disable internal display.")
         #expect(manager.isInternalDisplayOff == false)
+    }
+
+    // MARK: - Non-drawable (stale/ghost) external entries
+
+    @Test func disableRefusedWhenOnlyListedExternalIsNotDrawable() {
+        // WindowServer can keep a stale/ghost entry in the online list while
+        // nothing is drawable on it — that must not count as a working screen.
+        infoProvider.online = [1: true, 2: false]
+        infoProvider.active = [1]
+
+        #expect(manager.disableInternalDisplay() == false)
+        #expect(manager.lastError == "No external display detected.")
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func emergencyCheckRestoresWhenOnlyListedExternalIsNotDrawable() {
+        idStore.storedID = 1
+        idStore.storedOffState = true
+        infoProvider.online = [2: false] // panel off; only a non-drawable external listed
+        infoProvider.active = []
+
+        manager.performEmergencyCheckIfNeeded()
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(configurer.calls.last?.id == 1)
+        #expect(configurer.calls.last?.enabled == true)
+    }
+
+    @Test func emergencyCheckReconcilesDivergedStateWithNonDrawableExternal() {
+        // Recorded "on" but the panel is physically offline, and the only
+        // listed external is not drawable: this used to be a silent no-op —
+        // the shape of the 2026-09-21 field incident.
+        idStore.storedID = 1
+        idStore.storedOffState = false
+        infoProvider.online = [2: false]
+        infoProvider.active = []
+
+        manager.performEmergencyCheckIfNeeded()
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(idStore.storedOffState == false)
+        #expect(configurer.calls.last?.id == 1)
+        #expect(configurer.calls.last?.enabled == true)
+    }
+
+    @Test func autoRevertDoesNotActOnNonDrawableExternal() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        infoProvider.online = [1: true]
+        manager.handleWake() // fallback: internal left on, flag set
+        configurer.calls.removeAll()
+
+        infoProvider.online = [1: true, 2: false]
+        infoProvider.active = [1] // listed but not drawable
+        manager.performEmergencyCheckIfNeeded()
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func handleWakeLeavesOnWhenExternalIsNotDrawable() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        configurer.calls.removeAll()
+
+        infoProvider.online = [2: false] // external listed but not drawable
+        infoProvider.active = []
+
+        manager.handleWake()
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(configurer.calls.last?.id == 1)
+        #expect(configurer.calls.last?.enabled == true)
+    }
+
+    // MARK: - Display sleep
+
+    @Test func emergencyCheckDefersWhileScreensAreAsleep() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        configurer.calls.removeAll()
+
+        // Display sleep: the external is still connected but nothing is
+        // drawable, including the panel.
+        infoProvider.online = [2: false]
+        infoProvider.active = []
+
+        manager.performEmergencyCheckIfNeeded(screensAreAsleep: true)
+
+        #expect(manager.isInternalDisplayOff == true)
+        #expect(idStore.storedOffState == true)
+        #expect(configurer.calls.isEmpty)
+
+        // Screens wake with the external drawable again: blackout is preserved.
+        infoProvider.active = [2]
+        manager.performEmergencyCheckIfNeeded(screensAreAsleep: false)
+
+        #expect(manager.isInternalDisplayOff == true)
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func emergencyCheckRestoresAfterScreensWakeWhenExternalIsGone() {
+        idStore.storedID = 1
+        idStore.storedOffState = true
+        infoProvider.online = [2: false] // stale entry only, nothing drawable
+        infoProvider.active = []
+
+        manager.performEmergencyCheckIfNeeded(screensAreAsleep: true)
+        #expect(configurer.calls.isEmpty) // deferred while asleep
+
+        infoProvider.online = [:]
+        manager.performEmergencyCheckIfNeeded(screensAreAsleep: false)
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(configurer.calls.last?.enabled == true)
     }
 }

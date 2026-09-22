@@ -11,7 +11,10 @@ private final class FakeConfigurer: DisplayConfiguring {
 
 private final class FakeInfoProvider: DisplayInfoProviding {
     var online: [CGDirectDisplayID: Bool] = [:] // id -> isBuiltin
+    var active: Set<CGDirectDisplayID>?
+
     func onlineDisplayIDs() -> [CGDirectDisplayID] { Array(online.keys) }
+    func activeDisplayIDs() -> [CGDirectDisplayID] { Array(active ?? Set(online.keys)) }
     func isBuiltin(_ id: CGDirectDisplayID) -> Bool { online[id] ?? false }
 }
 
@@ -116,5 +119,17 @@ final class DisplayStateViewModelTests {
         view.toggleBinding.wrappedValue = false
         #expect(viewModel.isInternalDisplayOff == false)
         #expect(view.toggleBinding.wrappedValue == false)
+    }
+
+    @Test func hasExternalDisplayIgnoresNonDrawableExternal() {
+        // A stale/ghost entry in the online list must not enable the switch:
+        // the app can't black out the internal panel for a display it can't
+        // prove is drawable.
+        infoProvider.online = [1: true, 2: false]
+        infoProvider.active = [1]
+
+        let viewModel = makeViewModel()
+
+        #expect(viewModel.hasExternalDisplay == false)
     }
 }

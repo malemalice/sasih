@@ -17,14 +17,14 @@ final class DisplayStateViewModel: ObservableObject {
         self.touchBarRecovery = touchBarRecovery
         self.isInternalDisplayOff = manager.isInternalDisplayOff
         self.lastError = manager.lastError
-        self.hasExternalDisplay = manager.externalDisplayCount > 0
+        self.hasExternalDisplay = manager.usableExternalDisplayCount > 0
         self.autoRevertOnReconnectEnabled = manager.autoRevertOnReconnectEnabled
     }
 
     func refresh() {
         isInternalDisplayOff = manager.isInternalDisplayOff
         lastError = manager.lastError
-        hasExternalDisplay = manager.externalDisplayCount > 0
+        hasExternalDisplay = manager.usableExternalDisplayCount > 0
     }
 
     func toggle() {

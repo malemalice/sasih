@@ -53,11 +53,19 @@ public final class DisplayManager {
         infoProvider.externalDisplayCount()
     }
 
+    /// Externals the user can actually see: online *and* drawable. This is the
+    /// predicate every blackout/restore decision uses (see
+    /// `DisplayInfoProviding.usableExternalDisplayCount`).
+    public var usableExternalDisplayCount: Int {
+        infoProvider.usableExternalDisplayCount()
+    }
+
     @discardableResult
     public func disableInternalDisplay() -> Bool {
         let onlineIDs = infoProvider.onlineDisplayIDs()
-        let externalCount = onlineIDs.filter { !infoProvider.isBuiltin($0) }.count
-        logger.notice("disableInternalDisplay: onlineIDs=\(onlineIDs, privacy: .public) externalCount=\(externalCount, privacy: .public)")
+        let activeIDs = infoProvider.activeDisplayIDs()
+        let usableExternalCount = infoProvider.usableExternalDisplayCount()
+        logger.notice("disableInternalDisplay: onlineIDs=\(onlineIDs, privacy: .public) activeIDs=\(activeIDs, privacy: .public) usableExternalCount=\(usableExternalCount, privacy: .public)")
 
         // Already off — e.g. macOS dropped the panel across a sleep/wake, or a
         // previous session left it off. Never issue a hardware call for a
@@ -70,12 +78,12 @@ public final class DisplayManager {
             return true
         }
 
-        guard DisplayGuards.canDisableInternal(externalDisplayCount: externalCount) else {
+        guard DisplayGuards.canDisableInternal(usableExternalDisplayCount: usableExternalCount) else {
             lastError = "No external display detected."
-            logger.notice("disableInternalDisplay: refused — no external display detected")
+            logger.notice("disableInternalDisplay: refused — no drawable external display (onlineIDs=\(onlineIDs, privacy: .public) activeIDs=\(activeIDs, privacy: .public))")
             return false
         }
-        guard !DisplayGuards.isLastActiveDisplay(activeDisplayCount: onlineIDs.count) else {
+        guard !DisplayGuards.isLastActiveDisplay(activeDisplayCount: activeIDs.count) else {
             lastError = "Refusing to disable the last active display."
             logger.notice("disableInternalDisplay: refused — would be the last active display")
             return false
@@ -136,33 +144,46 @@ public final class DisplayManager {
     }
 
     /// Call periodically (safety-net timer) and on every display-reconfiguration
-    /// event. If the internal display is off and no external is present, restore
-    /// immediately — this is the top-priority correctness guarantee of the app.
-    /// Also the counterpart reconciliation: if the internal display is only on
-    /// because we fell back to it, and an external has since reappeared, turn
-    /// it back off — subject to the user's auto-revert preference.
+    /// event. If the internal display is off and no *drawable* external is
+    /// present, restore immediately — this is the top-priority correctness
+    /// guarantee of the app. Also the counterpart reconciliation: if the
+    /// internal display is only on because we fell back to it, and a drawable
+    /// external has since reappeared, turn it back off — subject to the user's
+    /// auto-revert preference.
+    ///
+    /// `screensAreAsleep` must be true while macOS has the screens in display
+    /// sleep: then *no* display is drawable (including a perfectly healthy
+    /// external), and acting on that snapshot would cancel blackout on every
+    /// display-sleep cycle. AppDelegate tracks it via the screensDidSleep/Wake
+    /// notifications and re-runs this check right after the screens wake.
     ///
     /// Note on the zero-count case: an empty online list is the *intended*
     /// signature of a genuine unplug (see CGDisplayInfoProvider — WindowServer
     /// leaves only a synthetic placeholder, which is filtered out). It can also
     /// occur transiently mid-reconfiguration, so the logging below records the
-    /// count that drove the decision.
-    public func performEmergencyCheckIfNeeded() {
-        // One snapshot, so the logged list and the count that drives the
+    /// lists that drove the decision.
+    public func performEmergencyCheckIfNeeded(screensAreAsleep: Bool = false) {
+        // One snapshot, so the logged lists and the counts that drive the
         // decision below can never disagree about which instant they describe.
         let onlineIDs = infoProvider.onlineDisplayIDs()
-        let externalCount = onlineIDs.filter { !infoProvider.isBuiltin($0) }.count
-        logger.notice("performEmergencyCheckIfNeeded: isInternalDisplayOff=\(self.isInternalDisplayOff, privacy: .public) internalOnIsFallback=\(self.internalOnIsFallback, privacy: .public) onlineIDs=\(onlineIDs, privacy: .public) externalCount=\(externalCount, privacy: .public) cachedInternalDisplayID=\(String(describing: self.cachedInternalDisplayID), privacy: .public)")
+        let usableExternalCount = infoProvider.usableExternalDisplayCount()
+        logger.notice("performEmergencyCheckIfNeeded: isInternalDisplayOff=\(self.isInternalDisplayOff, privacy: .public) internalOnIsFallback=\(self.internalOnIsFallback, privacy: .public) screensAreAsleep=\(screensAreAsleep, privacy: .public) onlineIDs=\(onlineIDs, privacy: .public) usableExternalCount=\(usableExternalCount, privacy: .public) cachedInternalDisplayID=\(String(describing: self.cachedInternalDisplayID), privacy: .public)")
+
+        guard !screensAreAsleep else {
+            logger.notice("performEmergencyCheckIfNeeded: screens asleep — deferring (no state change)")
+            return
+        }
 
         // The panel being absent from the online list is ground truth that it
         // is off. Record that instead of trusting the recorded on-state: the
         // reapply-off below would otherwise call disableInternalDisplay() for
         // an already-off panel, the last-active-display guard would refuse it
-        // forever, and the fallback flag would never clear. Outside the
-        // fallback window an external-present blip is ignored, since the
-        // online list can transiently omit the panel mid-reconfiguration.
+        // forever, and the fallback flag would never clear. A drawable external
+        // outside the fallback window is still ignored, since the online list
+        // can transiently omit the panel mid-reconfiguration — but a merely
+        // listed (non-drawable) external must not hold the recorded state on.
         if !isInternalDisplayOnline(in: onlineIDs), !isInternalDisplayOff,
-           (externalCount == 0 || internalOnIsFallback) {
+           (usableExternalCount == 0 || internalOnIsFallback) {
             logger.notice("performEmergencyCheckIfNeeded: panel offline while state said on — reconciling to off")
             isInternalDisplayOff = true
             idStore.saveOffState(true)
@@ -170,18 +191,18 @@ public final class DisplayManager {
         }
 
         if isInternalDisplayOff {
-            guard externalCount == 0 else {
-                logger.notice("performEmergencyCheckIfNeeded: external present — nothing to do")
+            guard usableExternalCount == 0 else {
+                logger.notice("performEmergencyCheckIfNeeded: drawable external present — nothing to do")
                 return
             }
-            logger.notice("performEmergencyCheckIfNeeded: no external present — restoring internal")
+            logger.notice("performEmergencyCheckIfNeeded: no drawable external present — restoring internal")
             internalOnIsFallback = true
             enableInternalDisplay()
             return
         }
 
-        guard internalOnIsFallback, autoRevertOnReconnectEnabled, externalCount > 0 else { return }
-        logger.notice("performEmergencyCheckIfNeeded: external reconnected after fallback — reapplying off")
+        guard internalOnIsFallback, autoRevertOnReconnectEnabled, usableExternalCount > 0 else { return }
+        logger.notice("performEmergencyCheckIfNeeded: drawable external reconnected after fallback — reapplying off")
         if disableInternalDisplay() {
             internalOnIsFallback = false
         }
@@ -192,9 +213,14 @@ public final class DisplayManager {
     /// current at all times.
     public func handleWake() {
         let wasOff = idStore.loadOffState()
-        let externalPresent = externalDisplayCount > 0
+        // A drawable external is required to re-apply blackout: a stale/ghost
+        // entry in the online list must not black out the panel macOS just
+        // restored. If the external enumerates late, this falls back to
+        // `leaveOn` and auto-revert re-applies once it is actually drawable.
+        let usableExternalCount = infoProvider.usableExternalDisplayCount()
+        let externalPresent = usableExternalCount > 0
         let action = SleepWakeDecision.wakeAction(wasOffBeforeSleep: wasOff, externalPresentOnWake: externalPresent)
-        logger.notice("handleWake: wasOff=\(wasOff, privacy: .public) externalPresent=\(externalPresent, privacy: .public) action=\(String(describing: action), privacy: .public)")
+        logger.notice("handleWake: wasOff=\(wasOff, privacy: .public) usableExternalCount=\(usableExternalCount, privacy: .public) externalPresent=\(externalPresent, privacy: .public) action=\(String(describing: action), privacy: .public)")
         switch action {
         case .reapplyOff:
             disableInternalDisplay()

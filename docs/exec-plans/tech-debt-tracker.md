@@ -18,6 +18,7 @@
 | TD-008 | mac-app-blackout | Compatibility | Private-API behaviour is unverified on macOS 14/15/16 (this machine's version is the only one tested). Re-verification is a manual matrix run per upgrade. | M | 2026-09-22 | — |
 | TD-009 | mac-app-blackout | Landing page | Deferred by plan until a screenshot/GIF + final icon exist; no artifact yet. | L | 2026-09-22 | — |
 | TD-010 | mac-app-blackout | App lifecycle | Emergency-check reconciliation treats a panel absent from `CGGetOnlineDisplayList` as ground truth inside fallback windows. A sub-tick reconfiguration blip while the panel is physically on could theoretically mis-record state as off (no stranding; converges on the next external cycle). Steady-state logs show stable online lists — no observed occurrence. | L | 2026-09-22 | — |
+| TD-011 | mac-app-blackout | Compatibility | A stale display entry that still reports `CGDisplayIsActive` (a fully ghost-impersonating display) cannot be distinguished from a real drawable external using public CG queries; blackout could in principle outlive a hidden display in that exact case. Mitigations: drawable-external predicate, active-count guard, `screensAreAsleep` deferral, and log correlation during matrix row 19. | M | 2026-09-22 | — |
 
 ## Resolved Items
 

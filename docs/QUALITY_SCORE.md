@@ -35,3 +35,4 @@
 | Date | Domain | Old | New | Changed by |
 |---|---|---|---|---|
 | 2026-09-22 | (all) | — | initial scores above | harness adoption |
+| 2026-09-22 | Display state logic | B | B | Added 8 regression tests for non-drawable/ghost externals + screen-sleep deferral (`ghost-external-stranding`); real-hardware matrix rows 18–20 still pending QA |
