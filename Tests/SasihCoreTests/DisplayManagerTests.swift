@@ -63,6 +63,15 @@ final class DisplayManagerTests {
         #expect(manager.disableInternalDisplay() == false)
     }
 
+    @Test func disableWhenPanelAlreadyOfflineRecordsStateWithoutHardwareCall() {
+        infoProvider.online = [2: false] // external only; the panel is already off
+        #expect(manager.disableInternalDisplay() == true)
+        #expect(manager.isInternalDisplayOff == true)
+        #expect(idStore.storedOffState == true)
+        #expect(configurer.calls.isEmpty)
+        #expect(manager.lastError == nil)
+    }
+
     @Test func enableRestoresUsingCachedID() {
         infoProvider.online = [1: true, 2: false]
         _ = manager.disableInternalDisplay()
@@ -132,6 +141,85 @@ final class DisplayManagerTests {
         manager.handleWake()
 
         #expect(manager.isInternalDisplayOff == false)
+    }
+
+    @Test func handleWakeDoesNotTouchHardwareWhenMacOSRestoredPanel() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        configurer.calls.removeAll()
+        infoProvider.online = [1: true] // macOS re-enabled the panel itself
+
+        manager.handleWake()
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func handleWakeRestoresInternalWhenMacOSDidNot() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        configurer.calls.removeAll()
+        infoProvider.online = [:] // no external, and the panel is still offline
+
+        manager.handleWake()
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(idStore.storedOffState == false)
+        #expect(configurer.calls.last?.id == 1)
+        #expect(configurer.calls.last?.enabled == true)
+    }
+
+    @Test func handleWakeKeepsOffRecordedWhenRestoreFails() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        configurer.calls.removeAll()
+        configurer.shouldSucceed = false
+        infoProvider.online = [:]
+
+        manager.handleWake()
+
+        // The attempt failed — keep recording "off" so the emergency check and
+        // launch restore keep retrying instead of claiming the panel is on.
+        #expect(manager.isInternalDisplayOff == true)
+        #expect(idStore.storedOffState == true)
+        #expect(configurer.calls.last?.enabled == true)
+    }
+
+    @Test func emergencyCheckReconcilesFallbackPanelAlreadyOffline() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        infoProvider.online = [1: true]
+        manager.handleWake() // fallback: panel on, flag set
+        #expect(manager.isInternalDisplayOff == false)
+        configurer.calls.removeAll()
+
+        // External returns, but the panel is physically offline while the
+        // recorded state still says "on" — the stuck state from the field logs.
+        infoProvider.online = [2: false]
+        manager.performEmergencyCheckIfNeeded()
+
+        #expect(manager.isInternalDisplayOff == true)
+        #expect(idStore.storedOffState == true)
+        #expect(configurer.calls.isEmpty)
+
+        // And the next tick must not retry a no-op disable forever.
+        manager.performEmergencyCheckIfNeeded()
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func emergencyCheckRestoresPanelWhenStateSaidOnButPanelOffline() {
+        // Persisted state claims the panel is on (e.g. written by a pre-fix
+        // build), but nothing is online at all — the stranding case.
+        idStore.storedID = 1
+        idStore.storedOffState = false
+        infoProvider.online = [:]
+
+        manager.performEmergencyCheckIfNeeded()
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(idStore.storedOffState == false)
+        #expect(configurer.calls.last?.id == 1)
+        #expect(configurer.calls.last?.enabled == true)
     }
 
     @Test func handleWakeLeavesOnFlagsFallbackForReconciliation() {

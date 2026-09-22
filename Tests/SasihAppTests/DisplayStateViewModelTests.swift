@@ -1,4 +1,5 @@
 import CoreGraphics
+import SwiftUI
 import Testing
 import SasihCore
 @testable import SasihApp
@@ -77,5 +78,43 @@ final class DisplayStateViewModelTests {
 
         #expect(viewModel.isInternalDisplayOff == true) // still off, enable failed
         #expect(touchBarRecovery.nudgeCallCount == 0)
+    }
+
+    @Test func setBlackoutActiveIsIntentBasedAndIdempotent() {
+        infoProvider.online = [1: true, 2: false]
+        idStore.storedOffState = false // starts on
+
+        let viewModel = makeViewModel()
+
+        viewModel.setBlackoutActive(false) // already inactive — no work
+        #expect(viewModel.isInternalDisplayOff == false)
+        #expect(touchBarRecovery.nudgeCallCount == 0)
+
+        viewModel.setBlackoutActive(true)
+        #expect(viewModel.isInternalDisplayOff == true)
+
+        viewModel.setBlackoutActive(true) // already active — no work
+        #expect(viewModel.isInternalDisplayOff == true)
+
+        viewModel.setBlackoutActive(false)
+        #expect(viewModel.isInternalDisplayOff == false)
+        #expect(touchBarRecovery.nudgeCallCount == 1)
+    }
+
+    @Test func blackoutSwitchBindingMatchesStateNotItsInverse() {
+        infoProvider.online = [1: true, 2: false]
+        idStore.storedOffState = false // starts on
+        let viewModel = makeViewModel()
+        let view = MenuBarView(viewModel: viewModel)
+
+        #expect(view.toggleBinding.wrappedValue == false)
+
+        view.toggleBinding.wrappedValue = true
+        #expect(viewModel.isInternalDisplayOff == true)
+        #expect(view.toggleBinding.wrappedValue == true)
+
+        view.toggleBinding.wrappedValue = false
+        #expect(viewModel.isInternalDisplayOff == false)
+        #expect(view.toggleBinding.wrappedValue == false)
     }
 }

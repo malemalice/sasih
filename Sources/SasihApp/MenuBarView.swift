@@ -6,10 +6,10 @@ struct MenuBarView: View {
     @State private var launchAtLoginEnabled = LaunchAtLogin.isEnabled
     @State private var isCheckingForUpdates = false
 
-    private var toggleBinding: Binding<Bool> {
+    var toggleBinding: Binding<Bool> {
         Binding(
-            get: { !viewModel.isInternalDisplayOff },
-            set: { _ in viewModel.toggle() }
+            get: { viewModel.isInternalDisplayOff },
+            set: { viewModel.setBlackoutActive($0) }
         )
     }
 

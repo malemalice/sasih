@@ -35,4 +35,12 @@ final class DisplayStateViewModel: ObservableObject {
             touchBarRecovery.nudge()
         }
     }
+
+    /// Maps the Blackout switch's desired value to the right action. The guard
+    /// keeps this intent-based: if the state changed since the switch was
+    /// rendered (e.g. auto-revert), a stale click can't invert the outcome.
+    func setBlackoutActive(_ isActive: Bool) {
+        guard isActive != isInternalDisplayOff else { return }
+        toggle()
+    }
 }

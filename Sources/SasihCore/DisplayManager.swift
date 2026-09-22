@@ -59,6 +59,17 @@ public final class DisplayManager {
         let externalCount = onlineIDs.filter { !infoProvider.isBuiltin($0) }.count
         logger.notice("disableInternalDisplay: onlineIDs=\(onlineIDs, privacy: .public) externalCount=\(externalCount, privacy: .public)")
 
+        // Already off — e.g. macOS dropped the panel across a sleep/wake, or a
+        // previous session left it off. Never issue a hardware call for a
+        // display that isn't online; just make the recorded state agree.
+        guard isInternalDisplayOnline(in: onlineIDs) else {
+            isInternalDisplayOff = true
+            idStore.saveOffState(true)
+            lastError = nil
+            logger.notice("disableInternalDisplay: internal display already offline — recording off state")
+            return true
+        }
+
         guard DisplayGuards.canDisableInternal(externalDisplayCount: externalCount) else {
             lastError = "No external display detected."
             logger.notice("disableInternalDisplay: refused — no external display detected")
@@ -143,6 +154,21 @@ public final class DisplayManager {
         let externalCount = onlineIDs.filter { !infoProvider.isBuiltin($0) }.count
         logger.notice("performEmergencyCheckIfNeeded: isInternalDisplayOff=\(self.isInternalDisplayOff, privacy: .public) internalOnIsFallback=\(self.internalOnIsFallback, privacy: .public) onlineIDs=\(onlineIDs, privacy: .public) externalCount=\(externalCount, privacy: .public) cachedInternalDisplayID=\(String(describing: self.cachedInternalDisplayID), privacy: .public)")
 
+        // The panel being absent from the online list is ground truth that it
+        // is off. Record that instead of trusting the recorded on-state: the
+        // reapply-off below would otherwise call disableInternalDisplay() for
+        // an already-off panel, the last-active-display guard would refuse it
+        // forever, and the fallback flag would never clear. Outside the
+        // fallback window an external-present blip is ignored, since the
+        // online list can transiently omit the panel mid-reconfiguration.
+        if !isInternalDisplayOnline(in: onlineIDs), !isInternalDisplayOff,
+           (externalCount == 0 || internalOnIsFallback) {
+            logger.notice("performEmergencyCheckIfNeeded: panel offline while state said on — reconciling to off")
+            isInternalDisplayOff = true
+            idStore.saveOffState(true)
+            internalOnIsFallback = false
+        }
+
         if isInternalDisplayOff {
             guard externalCount == 0 else {
                 logger.notice("performEmergencyCheckIfNeeded: external present — nothing to do")
@@ -173,9 +199,19 @@ public final class DisplayManager {
         case .reapplyOff:
             disableInternalDisplay()
         case .leaveOn:
-            isInternalDisplayOff = false
-            idStore.saveOffState(false)
             internalOnIsFallback = true
+            if isInternalDisplayOnline(in: infoProvider.onlineDisplayIDs()) {
+                isInternalDisplayOff = false
+                idStore.saveOffState(false)
+            } else {
+                // macOS re-enables displays as part of wake, but not always
+                // reliably — the exact state-loss case this app exists for.
+                // Restore it ourselves; if that fails, leave the off-state
+                // recorded so the emergency check and launch restore keep
+                // retrying rather than trusting an assumption.
+                logger.notice("handleWake: macOS did not restore the internal display — restoring explicitly")
+                enableInternalDisplay()
+            }
         case .doNothing:
             break
         }
@@ -195,6 +231,10 @@ public final class DisplayManager {
         guard isInternalDisplayOff else { return }
         logger.notice("restoreBeforeQuit: restoring internal display before quit")
         enableInternalDisplay()
+    }
+
+    private func isInternalDisplayOnline(in onlineIDs: [CGDirectDisplayID]) -> Bool {
+        onlineIDs.contains(where: infoProvider.isBuiltin)
     }
 
     private func resolveInternalDisplayID(from onlineIDs: [CGDirectDisplayID]) -> CGDirectDisplayID? {
