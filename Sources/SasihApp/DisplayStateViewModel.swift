@@ -42,7 +42,8 @@ final class DisplayStateViewModel: ObservableObject {
         manager.toggle()
         refresh()
         if wasOff && !isInternalDisplayOff {
-            touchBarRecovery.nudge()
+            let resumeStayAwake = stayAwake.suspendForDisplaySleepCycle()
+            touchBarRecovery.nudge(completion: resumeStayAwake)
         }
     }
 

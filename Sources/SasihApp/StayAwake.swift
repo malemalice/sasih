@@ -44,7 +44,12 @@ struct RealPowerAssertionManager: PowerAssertionManaging {
 /// Persisted so it survives relaunch; the assertion itself is process-scoped
 /// and does not need explicit crash recovery — macOS releases it automatically
 /// if this process dies, unlike the display-off state DisplayManager tracks.
-final class StayAwake {
+/// `@unchecked Sendable`: `isHoldingAssertion` is normally only touched from
+/// the main thread, except for the resume closure returned by
+/// `suspendForDisplaySleepCycle()`, which TouchBarRecovery invokes from its
+/// background queue — safe because that window never overlaps with another
+/// caller (nothing else toggles Stay Awake mid-nudge).
+final class StayAwake: @unchecked Sendable {
     private let defaults: UserDefaults
     private let assertionManager: PowerAssertionManaging
     private let defaultsKey = "StayAwakeEnabled"
@@ -78,6 +83,23 @@ final class StayAwake {
     /// keeps the held/not-held bookkeeping honest for a clean shutdown.
     func releaseIfNeeded() {
         setHoldingAssertion(false)
+    }
+
+    /// Temporarily releases the assertion so a forced display sleep→wake
+    /// cycle (TouchBarRecovery's `nudge()`, which resignals the Touch Bar's
+    /// DFR session) isn't fought by macOS power management — with the
+    /// idle-display-sleep assertion held, the OS can re-wake the display out
+    /// from under `pmset displaysleepnow` almost immediately, so the "real"
+    /// sleep→wake transition the Touch Bar needs never actually completes.
+    /// Returns a closure that restores the assertion afterward (a no-op if
+    /// it wasn't held).
+    func suspendForDisplaySleepCycle() -> @Sendable () -> Void {
+        guard isHoldingAssertion else { return {} }
+        assertionManager.release()
+        isHoldingAssertion = false
+        return { [self] in
+            isHoldingAssertion = assertionManager.acquire(reason: "Sasih: Stay Awake")
+        }
     }
 
     private func setHoldingAssertion(_ shouldHold: Bool) {

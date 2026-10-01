@@ -32,7 +32,20 @@ private final class FakeIDStore: DisplayIDPersisting {
 
 private final class FakeTouchBarRecovery: TouchBarRecovering, @unchecked Sendable {
     var nudgeCallCount = 0
-    func nudge() { nudgeCallCount += 1 }
+    /// When true, defers `completion` instead of calling it inline, so tests
+    /// can observe state between the nudge starting and finishing — mirrors
+    /// the real implementation's async sleep/wake cycle.
+    var deferCompletion = false
+    var pendingCompletion: (@Sendable () -> Void)?
+
+    func nudge(completion: @escaping @Sendable () -> Void) {
+        nudgeCallCount += 1
+        if deferCompletion {
+            pendingCompletion = completion
+        } else {
+            completion()
+        }
+    }
 }
 
 @MainActor
@@ -138,6 +151,43 @@ final class DisplayStateViewModelTests {
 
         viewModel.stayAwakeEnabled = false
         #expect(assertionManager.releaseCallCount == 1)
+    }
+
+    @Test func toggleSuspendsStayAwakeAssertionDuringTouchBarNudge() {
+        infoProvider.online = [1: true, 2: false]
+        idStore.storedID = 1
+        idStore.storedOffState = true // starts off
+
+        let viewModel = makeViewModel()
+        viewModel.stayAwakeEnabled = true
+        touchBarRecovery.deferCompletion = true
+        #expect(assertionManager.acquireCallCount == 1)
+
+        viewModel.toggle() // off -> on, nudges the Touch Bar
+
+        // While the nudge's sleep/wake cycle is in flight, the assertion must
+        // be released so macOS doesn't fight the forced display sleep.
+        #expect(assertionManager.releaseCallCount == 1)
+        #expect(assertionManager.acquireCallCount == 1)
+
+        touchBarRecovery.pendingCompletion?()
+
+        // Once the cycle finishes, Stay Awake resumes.
+        #expect(assertionManager.acquireCallCount == 2)
+    }
+
+    @Test func toggleDoesNotTouchStayAwakeAssertionWhenDisabled() {
+        infoProvider.online = [1: true, 2: false]
+        idStore.storedID = 1
+        idStore.storedOffState = true // starts off
+
+        let viewModel = makeViewModel()
+        #expect(viewModel.stayAwakeEnabled == false)
+
+        viewModel.toggle() // off -> on
+
+        #expect(assertionManager.acquireCallCount == 0)
+        #expect(assertionManager.releaseCallCount == 0)
     }
 
     @Test func hasExternalDisplayIgnoresNonDrawableExternal() {

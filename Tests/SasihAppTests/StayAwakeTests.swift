@@ -29,4 +29,12 @@ final class StayAwakeTests {
     @Test func releaseIfNeededReleasesOnlyWhenHeld() {
         #expect(StayAwakeScenario.releaseIfNeededReleasesOnlyWhenHeld())
     }
+
+    @Test func suspendForDisplaySleepCycleReleasesThenResumeReacquiresWhenHeld() {
+        #expect(StayAwakeScenario.suspendForDisplaySleepCycleReleasesThenResumeReacquiresWhenHeld())
+    }
+
+    @Test func suspendForDisplaySleepCycleIsNoOpWhenNotHeld() {
+        #expect(StayAwakeScenario.suspendForDisplaySleepCycleIsNoOpWhenNotHeld())
+    }
 }

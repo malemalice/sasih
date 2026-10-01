@@ -95,4 +95,22 @@ enum StayAwakeScenario {
             return assertionManager.releaseCallCount == 1
         }
     }
+
+    static func suspendForDisplaySleepCycleReleasesThenResumeReacquiresWhenHeld() -> Bool {
+        withStayAwake { stayAwake, assertionManager, _ in
+            stayAwake.isEnabled = true
+            let resume = stayAwake.suspendForDisplaySleepCycle()
+            guard assertionManager.releaseCallCount == 1, assertionManager.acquireCallCount == 1 else { return false }
+            resume()
+            return assertionManager.acquireCallCount == 2 && assertionManager.releaseCallCount == 1
+        }
+    }
+
+    static func suspendForDisplaySleepCycleIsNoOpWhenNotHeld() -> Bool {
+        withStayAwake { stayAwake, assertionManager, _ in
+            let resume = stayAwake.suspendForDisplaySleepCycle()
+            resume()
+            return assertionManager.acquireCallCount == 0 && assertionManager.releaseCallCount == 0
+        }
+    }
 }

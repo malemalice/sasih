@@ -27,7 +27,14 @@ struct RealProcessRunner: ProcessRunning {
 }
 
 protocol TouchBarRecovering {
-    func nudge()
+    /// `completion` runs after the sleep/wake cycle finishes (or immediately,
+    /// synchronously, if the Touch Bar isn't present) — on whatever queue the
+    /// recovery work ran on, not necessarily the main thread.
+    func nudge(completion: @escaping @Sendable () -> Void)
+}
+
+extension TouchBarRecovering {
+    func nudge() { nudge(completion: {}) }
 }
 
 /// Best-effort fix for a real hardware quirk on Touch Bar Macs (13" M1/M2
@@ -62,12 +69,16 @@ struct TouchBarRecovery: TouchBarRecovering {
         runner.run("/usr/bin/pgrep", ["-x", "TouchBarServer"]) == 0
     }
 
-    func nudge() {
-        guard isTouchBarPresent() else { return }
+    func nudge(completion: @escaping @Sendable () -> Void = {}) {
+        guard isTouchBarPresent() else {
+            completion()
+            return
+        }
         dispatchAsync { [runner, sleepDelay] in
             runner.run("/usr/bin/pmset", ["displaysleepnow"])
             sleepDelay(0.5)
             runner.run("/usr/bin/caffeinate", ["-u", "-t", "1"])
+            completion()
         }
     }
 }
