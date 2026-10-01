@@ -9,14 +9,16 @@
 5. As a user, I can enable "Launch at Login" so this is always available without manual setup.
 6. As a user, my keyboard, trackpad, Touch Bar, and speakers continue to work exactly as before — no behavior change is expected or acceptable here.
 7. As a user, after my Mac sleeps and wakes, my last chosen state (off/on) is restored automatically.
+8. As a user, I can enable "Stay Awake" to keep my screen from idle-sleeping (e.g. while monitoring a long-running task) — my screen lock / screensaver still activates normally, since that's a separate macOS timer this feature doesn't touch.
 
-## Implemented feature surface (as of v0.1.4)
+## Implemented feature surface (as of v0.1.5)
 
 | Feature | UI label | Code |
 |---|---|---|
 | Toggle internal display off/on | "Blackout" | `Sources/SasihCore/DisplayManager.swift`, `Sources/SasihApp/MenuBarView.swift` |
 | Never strand the user (auto-restore) | (safety nets, no UI) | `DisplayManager.performEmergencyCheckIfNeeded()`, `restoreOnLaunchIfNeeded()`, `restoreBeforeQuit()`, `handleWake()` |
 | Auto-Blackout on external reconnect | "Auto-Blackout" | `DisplayManager.autoRevertOnReconnectEnabled` (persisted, default on) |
+| Keep display from idle-sleeping | "Stay Awake" | `Sources/SasihApp/StayAwake.swift` (`IOPMAssertionCreateWithName`, persisted, default off) |
 | Launch at Login | "Launch at Login" | `Sources/SasihApp/LaunchAtLogin.swift` (`SMAppService.mainApp`) |
 | Update check | "Check for Updates…" | `Sources/SasihApp/UpdateChecker.swift` (GitHub Releases API) |
 | Touch Bar blank-panel recovery | (invisible) | `Sources/SasihApp/TouchBarRecovery.swift` |

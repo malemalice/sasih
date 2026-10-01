@@ -21,7 +21,7 @@
 ## Contract C — persisted state
 
 - **Transport:** in-process — `UserDefaults.standard` primary, `~/.sasih_internal_display_id` backup file (see `docs/erd/`).
-- **Shape (owned by the ERD, not this folder):** `BackupInternalDisplayID` (Int), `IsInternalDisplayOff` (Bool, default false), `AutoRevertInternalOffOnReconnect` (Bool, default true).
+- **Shape (owned by the ERD, not this folder):** `BackupInternalDisplayID` (Int), `IsInternalDisplayOff` (Bool, default false), `AutoRevertInternalOffOnReconnect` (Bool, default true), `StayAwakeEnabled` (Bool, default false — unrelated to display-off state, see `docs/erd/entities.md` §1b).
 - **Versioning policy:** none; keys are stable and additive. But **write semantics are part of the contract**: when each key is written, kept, or reconciled is what the crash/wake safety nets rely on — changing that behaviour is a contract change even when no key/type/default changes.
 - **Failure policy:** a missing/corrupt store must degrade to the safe direction (assume "on"), never to a state that could strand the user (see `docs/erd/notes.md`).
 

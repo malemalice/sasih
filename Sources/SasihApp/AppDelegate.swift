@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let displayManager: DisplayManager
     let viewModel: DisplayStateViewModel
     private let touchBarRecovery: TouchBarRecovering
+    private let stayAwake: StayAwake
     private let logger = appDelegateLogger
 
     private var backstopTimer: Timer?
@@ -48,7 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.displayManager = manager
         self.touchBarRecovery = TouchBarRecovery()
-        self.viewModel = DisplayStateViewModel(manager: manager, touchBarRecovery: touchBarRecovery)
+        self.stayAwake = StayAwake()
+        self.viewModel = DisplayStateViewModel(manager: manager, touchBarRecovery: touchBarRecovery, stayAwake: stayAwake)
         super.init()
     }
 
@@ -58,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // in a previous session — before the user interacts with anything.
         displayManager.restoreOnLaunchIfNeeded()
         viewModel.refresh()
+        stayAwake.applyPersistedPreference()
 
         registerDisplayReconfigurationCallback()
         registerSleepWakeObservers()
@@ -67,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         logger.notice("applicationWillTerminate")
         displayManager.restoreBeforeQuit()
+        stayAwake.releaseIfNeeded()
     }
 
     // MARK: - Safety nets

@@ -5,20 +5,30 @@ import Combine
 final class DisplayStateViewModel: ObservableObject {
     let manager: DisplayManager
     private let touchBarRecovery: TouchBarRecovering
+    private let stayAwake: StayAwake
     @Published private(set) var isInternalDisplayOff: Bool
     @Published private(set) var lastError: String?
     @Published private(set) var hasExternalDisplay: Bool
     @Published var autoRevertOnReconnectEnabled: Bool {
         didSet { manager.autoRevertOnReconnectEnabled = autoRevertOnReconnectEnabled }
     }
+    @Published var stayAwakeEnabled: Bool {
+        didSet { stayAwake.isEnabled = stayAwakeEnabled }
+    }
 
-    init(manager: DisplayManager, touchBarRecovery: TouchBarRecovering = TouchBarRecovery()) {
+    init(
+        manager: DisplayManager,
+        touchBarRecovery: TouchBarRecovering = TouchBarRecovery(),
+        stayAwake: StayAwake = StayAwake()
+    ) {
         self.manager = manager
         self.touchBarRecovery = touchBarRecovery
+        self.stayAwake = stayAwake
         self.isInternalDisplayOff = manager.isInternalDisplayOff
         self.lastError = manager.lastError
         self.hasExternalDisplay = manager.usableExternalDisplayCount > 0
         self.autoRevertOnReconnectEnabled = manager.autoRevertOnReconnectEnabled
+        self.stayAwakeEnabled = stayAwake.isEnabled
     }
 
     func refresh() {

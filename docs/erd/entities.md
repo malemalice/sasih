@@ -8,6 +8,12 @@
 | `IsInternalDisplayOff` | `Bool` | `false` (absent = false) | on every successful disable/enable; `handleWake()` `leaveOn` path only once the panel is verified online (or restored); emergency-check reconciliation when the online list proves the recorded state wrong | init; `handleWake()`; `restoreOnLaunchIfNeeded()` | Crash/force-quit recovery and sleep/wake state restoration |
 | `AutoRevertInternalOffOnReconnect` | `Bool` | `true` (opt-out) | when the user flips the "Auto-Blackout" toggle | init; `performEmergencyCheckIfNeeded()` | User preference: re-apply "internal off" automatically when an external display reconnects after a fallback |
 
+## 1b. Persisted entity (`StayAwake`, `Sources/SasihApp/StayAwake.swift`)
+
+| Entity (UserDefaults key) | Type | Default | Written when | Read when | Purpose |
+|---|---|---|---|---|---|
+| `StayAwakeEnabled` | `Bool` | `false` (absent = false, opt-in) | when the user flips the "Stay Awake" toggle | `applyPersistedPreference()` at launch; `init` | User preference: hold `kIOPMAssertionTypePreventUserIdleDisplaySleep` so the display doesn't idle-sleep. Not owned by `DisplayIDStore`/`DisplayManager` — unrelated to display-off state, so it's its own small store in the app-shell target, not `SasihCore` |
+
 ## 2. Backup file entity
 
 | Path | Format | Purpose |
@@ -33,3 +39,4 @@ There is intentionally **no** backup file for `IsInternalDisplayOff` — the off
 | `DisplayStateViewModel.lastError` | `@Published String?` | `manager` | Error caption row |
 | `DisplayStateViewModel.hasExternalDisplay` | `@Published Bool` | `manager.usableExternalDisplayCount > 0` | Drives disabled state of the toggle |
 | `DisplayStateViewModel.autoRevertOnReconnectEnabled` | `@Published Bool` (didSet writes through) | `manager` | Auto-Blackout toggle |
+| `DisplayStateViewModel.stayAwakeEnabled` | `@Published Bool` (didSet writes through) | `stayAwake` (`StayAwake`) | Stay Awake toggle |

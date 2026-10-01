@@ -41,10 +41,15 @@ final class DisplayStateViewModelTests {
     private let infoProvider = FakeInfoProvider()
     private let idStore = FakeIDStore()
     private let touchBarRecovery = FakeTouchBarRecovery()
+    private let assertionManager = FakeAssertionManager()
 
     private func makeViewModel() -> DisplayStateViewModel {
         let manager = DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore)
-        return DisplayStateViewModel(manager: manager, touchBarRecovery: touchBarRecovery)
+        let stayAwake = StayAwake(
+            defaults: UserDefaults(suiteName: "DisplayStateViewModelTests-\(UUID().uuidString)")!,
+            assertionManager: assertionManager
+        )
+        return DisplayStateViewModel(manager: manager, touchBarRecovery: touchBarRecovery, stayAwake: stayAwake)
     }
 
     @Test func toggleFromOffToOnNudgesTouchBar() {
@@ -119,6 +124,20 @@ final class DisplayStateViewModelTests {
         view.toggleBinding.wrappedValue = false
         #expect(viewModel.isInternalDisplayOff == false)
         #expect(view.toggleBinding.wrappedValue == false)
+    }
+
+    @Test func stayAwakeEnabledTogglesThePowerAssertion() {
+        infoProvider.online = [1: true, 2: false]
+        idStore.storedOffState = false
+        let viewModel = makeViewModel()
+
+        #expect(viewModel.stayAwakeEnabled == false)
+
+        viewModel.stayAwakeEnabled = true
+        #expect(assertionManager.acquireCallCount == 1)
+
+        viewModel.stayAwakeEnabled = false
+        #expect(assertionManager.releaseCallCount == 1)
     }
 
     @Test func hasExternalDisplayIgnoresNonDrawableExternal() {

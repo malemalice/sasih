@@ -56,6 +56,10 @@ struct MenuBarView: View {
 
             Divider()
 
+            stayAwakeRow
+
+            Divider()
+
             launchAtLoginRow
 
             Divider()
@@ -192,6 +196,20 @@ struct MenuBarView: View {
             Text("Re-blackout automatically when your external display reconnects.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private var stayAwakeRow: some View {
+        HStack {
+            Text("Stay Awake")
+                .font(.system(size: 13))
+            Spacer()
+            Toggle("", isOn: $viewModel.stayAwakeEnabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .help("Keeps your screen from going dark when idle. Screen lock and sleep still work as usual.")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
