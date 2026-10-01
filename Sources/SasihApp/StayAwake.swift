@@ -44,15 +44,16 @@ struct RealPowerAssertionManager: PowerAssertionManaging {
 /// Persisted so it survives relaunch; the assertion itself is process-scoped
 /// and does not need explicit crash recovery — macOS releases it automatically
 /// if this process dies, unlike the display-off state DisplayManager tracks.
-/// `@unchecked Sendable`: `isHoldingAssertion` is normally only touched from
-/// the main thread, except for the resume closure returned by
+/// `@unchecked Sendable`: `isHoldingAssertion` is touched from the main
+/// thread *and* from the resume closure returned by
 /// `suspendForDisplaySleepCycle()`, which TouchBarRecovery invokes from its
-/// background queue — safe because that window never overlaps with another
-/// caller (nothing else toggles Stay Awake mid-nudge).
+/// background queue — that window can overlap with the user toggling Stay
+/// Awake, so access is serialized through `lock`.
 final class StayAwake: @unchecked Sendable {
     private let defaults: UserDefaults
     private let assertionManager: PowerAssertionManaging
     private let defaultsKey = "StayAwakeEnabled"
+    private let lock = NSLock()
     private var isHoldingAssertion = false
 
     init(
@@ -94,21 +95,38 @@ final class StayAwake: @unchecked Sendable {
     /// Returns a closure that restores the assertion afterward (a no-op if
     /// it wasn't held).
     func suspendForDisplaySleepCycle() -> @Sendable () -> Void {
-        guard isHoldingAssertion else { return {} }
+        lock.lock()
+        let wasHolding = isHoldingAssertion
+        if wasHolding { isHoldingAssertion = false }
+        lock.unlock()
+        guard wasHolding else { return {} }
         assertionManager.release()
-        isHoldingAssertion = false
+        // Re-check `isEnabled` (rather than unconditionally reacquiring) so
+        // a Stay Awake toggle that happened while the nudge was in flight
+        // isn't silently undone.
         return { [self] in
-            isHoldingAssertion = assertionManager.acquire(reason: "Sasih: Stay Awake")
+            let acquired = isEnabled && assertionManager.acquire(reason: "Sasih: Stay Awake")
+            lock.lock()
+            isHoldingAssertion = acquired
+            lock.unlock()
         }
     }
 
     private func setHoldingAssertion(_ shouldHold: Bool) {
-        guard shouldHold != isHoldingAssertion else { return }
+        lock.lock()
+        let currentlyHolding = isHoldingAssertion
+        lock.unlock()
+        guard shouldHold != currentlyHolding else { return }
         if shouldHold {
-            isHoldingAssertion = assertionManager.acquire(reason: "Sasih: Stay Awake")
+            let acquired = assertionManager.acquire(reason: "Sasih: Stay Awake")
+            lock.lock()
+            isHoldingAssertion = acquired
+            lock.unlock()
         } else {
             assertionManager.release()
+            lock.lock()
             isHoldingAssertion = false
+            lock.unlock()
         }
     }
 }
