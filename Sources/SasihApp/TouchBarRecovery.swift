@@ -66,15 +66,23 @@ struct TouchBarRecovery: TouchBarRecovering {
     }
 
     func isTouchBarPresent() -> Bool {
+        Self.isTouchBarPresent(runner: runner)
+    }
+
+    private static func isTouchBarPresent(runner: ProcessRunning) -> Bool {
         runner.run("/usr/bin/pgrep", ["-x", "TouchBarServer"]) == 0
     }
 
     func nudge(completion: @escaping @Sendable () -> Void = {}) {
-        guard isTouchBarPresent() else {
-            completion()
-            return
-        }
+        // The presence check itself shells out to pgrep and blocks on
+        // waitUntilExit — it must not run on the caller's thread (usually
+        // main, since this is invoked straight from the toggle handler), so
+        // the whole check-then-act sequence happens inside the dispatch.
         dispatchAsync { [runner, sleepDelay] in
+            guard Self.isTouchBarPresent(runner: runner) else {
+                completion()
+                return
+            }
             runner.run("/usr/bin/pmset", ["displaysleepnow"])
             sleepDelay(0.5)
             runner.run("/usr/bin/caffeinate", ["-u", "-t", "1"])
