@@ -225,7 +225,13 @@ struct MenuBarView: View {
                 .toggleStyle(.switch)
                 .help("Opens Sasih automatically in the background when you log in to your Mac.")
                 .onChange(of: launchAtLoginEnabled) { newValue in
-                    LaunchAtLogin.setEnabled(newValue)
+                    // Resync to the real SMAppService state: register/unregister
+                    // can silently fail, and this toggle must never show
+                    // something other than what will actually happen at login.
+                    let actual = LaunchAtLogin.setEnabled(newValue)
+                    if actual != launchAtLoginEnabled {
+                        launchAtLoginEnabled = actual
+                    }
                 }
         }
         .padding(.horizontal, 14)
