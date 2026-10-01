@@ -37,4 +37,8 @@ final class StayAwakeTests {
     @Test func suspendForDisplaySleepCycleIsNoOpWhenNotHeld() {
         #expect(StayAwakeScenario.suspendForDisplaySleepCycleIsNoOpWhenNotHeld())
     }
+
+    @Test func suspendForDisplaySleepCycleResumeDoesNotDoubleAcquireAfterConcurrentToggle() {
+        #expect(StayAwakeScenario.suspendForDisplaySleepCycleResumeDoesNotDoubleAcquireAfterConcurrentToggle())
+    }
 }

@@ -113,4 +113,27 @@ enum StayAwakeScenario {
             return assertionManager.acquireCallCount == 0 && assertionManager.releaseCallCount == 0
         }
     }
+
+    /// Regression test for a leaked IOPMAssertion: the Touch Bar nudge runs
+    /// the suspend/resume pair across a background queue, so a manual Stay
+    /// Awake toggle can land in between `suspendForDisplaySleepCycle()` and
+    /// its resume closure firing. If resume reacquires unconditionally, it
+    /// double-acquires on top of the manual toggle's own acquire —
+    /// `RealPowerAssertionManager` only tracks the latest `IOPMAssertionID`,
+    /// so the first one is never released.
+    static func suspendForDisplaySleepCycleResumeDoesNotDoubleAcquireAfterConcurrentToggle() -> Bool {
+        withStayAwake { stayAwake, assertionManager, _ in
+            stayAwake.isEnabled = true // acquire #1
+            let resume = stayAwake.suspendForDisplaySleepCycle() // release #1
+
+            // Simulate a manual toggle landing while the nudge is in flight.
+            stayAwake.isEnabled = false // no-op: already not holding
+            stayAwake.isEnabled = true // acquire #2 — reacquires ahead of resume
+
+            resume() // must see the assertion already held and skip reacquiring
+
+            return assertionManager.acquireCallCount == 2
+                && assertionManager.releaseCallCount == 1
+        }
+    }
 }

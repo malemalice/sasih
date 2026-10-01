@@ -95,38 +95,52 @@ final class StayAwake: @unchecked Sendable {
     /// Returns a closure that restores the assertion afterward (a no-op if
     /// it wasn't held).
     func suspendForDisplaySleepCycle() -> @Sendable () -> Void {
+        // The lock is held across the hardware call itself, not just the
+        // flag, for the whole suspend/resume pair below — see
+        // `setHoldingAssertion` for why: `assertionManager` isn't safe to
+        // call concurrently, and this closure runs on a background queue
+        // that can overlap with a main-thread toggle.
         lock.lock()
         let wasHolding = isHoldingAssertion
-        if wasHolding { isHoldingAssertion = false }
+        if wasHolding {
+            isHoldingAssertion = false
+            assertionManager.release()
+        }
         lock.unlock()
         guard wasHolding else { return {} }
-        assertionManager.release()
         // Re-check `isEnabled` (rather than unconditionally reacquiring) so
         // a Stay Awake toggle that happened while the nudge was in flight
         // isn't silently undone.
         return { [self] in
-            let acquired = isEnabled && assertionManager.acquire(reason: "Sasih: Stay Awake")
             lock.lock()
-            isHoldingAssertion = acquired
-            lock.unlock()
+            defer { lock.unlock() }
+            // A manual toggle that landed while the nudge was in flight may
+            // already have reacquired the assertion. Without this check
+            // we'd acquire a second time here, overwriting
+            // RealPowerAssertionManager's single stored IOPMAssertionID and
+            // leaking the first one for the rest of the process's life.
+            guard !isHoldingAssertion else { return }
+            isHoldingAssertion = isEnabled && assertionManager.acquire(reason: "Sasih: Stay Awake")
         }
     }
 
+    /// Holds `lock` across the `assertionManager` call itself (not just the
+    /// `isHoldingAssertion` flag): `RealPowerAssertionManager` stores a
+    /// single unsynchronized `IOPMAssertionID`, and the resume closure above
+    /// runs on a background queue that can overlap with a toggle on the main
+    /// thread. Releasing the lock between the hardware call and the flag
+    /// update would let both sides call `acquire`/`release` concurrently —
+    /// racing on that stored ID and leaking or losing an assertion — which a
+    /// lock around the flag alone cannot prevent.
     private func setHoldingAssertion(_ shouldHold: Bool) {
         lock.lock()
-        let currentlyHolding = isHoldingAssertion
-        lock.unlock()
-        guard shouldHold != currentlyHolding else { return }
+        defer { lock.unlock() }
+        guard shouldHold != isHoldingAssertion else { return }
         if shouldHold {
-            let acquired = assertionManager.acquire(reason: "Sasih: Stay Awake")
-            lock.lock()
-            isHoldingAssertion = acquired
-            lock.unlock()
+            isHoldingAssertion = assertionManager.acquire(reason: "Sasih: Stay Awake")
         } else {
             assertionManager.release()
-            lock.lock()
             isHoldingAssertion = false
-            lock.unlock()
         }
     }
 }
