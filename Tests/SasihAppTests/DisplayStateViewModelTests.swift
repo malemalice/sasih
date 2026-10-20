@@ -16,6 +16,9 @@ private final class FakeInfoProvider: DisplayInfoProviding {
     func onlineDisplayIDs() -> [CGDirectDisplayID] { Array(online.keys) }
     func activeDisplayIDs() -> [CGDirectDisplayID] { Array(active ?? Set(online.keys)) }
     func isBuiltin(_ id: CGDirectDisplayID) -> Bool { online[id] ?? false }
+
+    var mirrored: [CGDirectDisplayID] = []
+    func mirroredExternalDisplayIDs() -> [CGDirectDisplayID] { mirrored }
 }
 
 private final class FakeIDStore: DisplayIDPersisting {
@@ -200,5 +203,17 @@ final class DisplayStateViewModelTests {
         let viewModel = makeViewModel()
 
         #expect(viewModel.hasExternalDisplay == false)
+    }
+
+    @Test func mirroredExternalStillAllowsBlackout() {
+        // Non-technical users mirror without knowing it; the switch must stay
+        // usable — the manager stops mirroring before it blacks out.
+        infoProvider.online = [1: true, 2: false]
+        infoProvider.active = [1]
+        infoProvider.mirrored = [2]
+
+        let viewModel = makeViewModel()
+
+        #expect(viewModel.hasExternalDisplay == true)
     }
 }

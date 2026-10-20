@@ -6,12 +6,35 @@
 |---|---|---|---|
 | Neither symbol resolves (removed/renamed in a future macOS) | `SymbolResolution.resolve` returns `nil` | `setDisplay` returns `false`; **no** crash, **no** silent no-op | `DisplayManager.lastError = "Failed to disable internal display."` (or enable equivalent) → caption in menu |
 | `CGBeginDisplayConfiguration` non-success | `result != .success` | Return `false`, nothing to cancel | same as above |
-| Symbol call returns non-success (e.g. display already in target state) | `CGError != .success` | `CGCancelDisplayConfiguration`, return `false` | same as above |
-| `CGCompleteDisplayConfiguration` non-success | `CGError != .success` | Return `false` (state flags not updated) | same as above |
+| Symbol call returns non-success (e.g. display already in target state) | `CGError != .success` | `CGCancelDisplayConfiguration`; for **enable**, re-read `onlineDisplayIDs()` once first — if the builtin is now online the end state is already the target, so record on and return `true`; otherwise return `false` | same as above (only when the panel really stayed off) |
+| `CGCompleteDisplayConfiguration` non-success | `CGError != .success` | Return `false` (state flags not updated); the enable path still verifies the online list once and records success if the panel converged | same as above (only when the panel really stayed off) |
 | Guard refusal (no external / last active display) | `DisplayGuards` | Refuse before touching the API | "No external display detected." / "Refusing to disable the last active display." |
-| Internal display ID unknown | `cachedInternalDisplayID == nil && idStore.load() == nil` | Refuse the enable | "Internal display ID unknown — cannot restore." |
+| Guard refusal, but an external is hardware-mirroring | `canDisableInternal` refuses and `mirroredExternalDisplayIDs()` is non-empty | Call `stopMirroring(_:)` instead of refusing; on success set in-memory pending (15 s deadline), clear `lastError`, return `false` (no SkyLight call); the emergency check applies blackout via the guarded disable once the external is drawable | none — caption "Starting blackout…", switch shown on |
+| `stopMirroring` fails (`CGBeginDisplayConfiguration`, any `CGConfigureDisplayMirrorOfDisplay`, or `CGCompleteDisplayConfiguration` non-success) | returns `false` | `CGCancelDisplayConfiguration` on a per-id failure; nothing pending, panel untouched | "Couldn't stop screen mirroring. Turn off Mirror in System Settings → Displays." |
+| Pending un-mirror times out (external never became drawable within 15 s) | `performEmergencyCheckIfNeeded`, monotonic deadline passed | Clear pending; no SkyLight call; panel stays on | same "Couldn't stop screen mirroring…" text |
+| Internal display ID unknown | `cachedInternalDisplayID == nil && idStore.load() == nil`, and the builtin is not online | Refuse the enable | "Internal display ID unknown — cannot restore." |
+| Enable called while the panel is already online | Builtin present in `CGGetOnlineDisplayList`; SkyLight rejects the no-op transaction | Post-failure re-read sees the builtin online → record on + clear `lastError` (no shortcut before the call: a ghost online entry must not skip a real restore) | none |
 
-**Invariant:** failure must always leave the *actual* system state untouched or restored — never set `isInternalDisplayOff` optimistically. `lastError` is cleared only on a fully successful transaction.
+### Stop-mirroring flow (added 2026-10-20)
+
+```
+toggle on → disableInternalDisplay()
+  usable external? ── yes → normal SkyLight disable
+        │ no
+  mirrored external? ── no → "No external display detected."
+        │ yes
+  stopMirroring(ids) ── fail → "Couldn't stop screen mirroring…"
+        │ ok
+  pending (≤15 s, both screens on, "Starting blackout…")
+  emergency check (after sleep deferral):
+    usable external now → clear pending → disableInternalDisplay() (all guards re-run)
+    deadline passed     → clear pending → "Couldn't stop screen mirroring…"
+    builtin online      → keep waiting
+    builtin offline     → fall through to normal restore logic
+  toggle() while pending → cancel (no hardware call)
+```
+
+**Invariant:** failure must always leave the *actual* system state untouched or restored — never set `isInternalDisplayOff` optimistically. `lastError` is cleared only when the desired end state is verified: a successful transaction **or** observed reality already at the target (panel online for enable, absent for disable). One deliberate exception: a successful `stopMirroring` clears `lastError` while the blackout is pending (a stale "No external display detected." must not sit under "Starting blackout…"); `isInternalDisplayOff` is still not set until the guarded disable actually succeeds.
 
 ## Contract B — GitHub Releases API
 

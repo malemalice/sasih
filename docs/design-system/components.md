@@ -6,10 +6,10 @@ Order and content are deliberate — do not add a preferences window, tabs, or o
 
 | Section | Component | Content / behaviour |
 |---|---|---|
-| Header | icon 30×30 (`NSApplication.applicationIconImage`) + "Sasih" + status caption | Caption mirrors state in words: "Blackout active" / "Standing by" |
+| Header | icon 30×30 (`NSApplication.applicationIconImage`) + "Sasih" + status caption | Caption mirrors state in words: "Blackout active" / "Starting blackout…" (blackout requested, waiting for a mirrored external to finish un-mirroring — usually a few seconds, ≤ 15 s) / "Standing by" |
 | Divider | — | |
-| Display | row: "Blackout" + switch | Switch is ON exactly when blackout is active (`isInternalDisplayOff`); writes through `DisplayStateViewModel.setBlackoutActive(_:)`, which no-ops if the state already matches (auto-revert can flip state under a stale click). Disabled when `!hasExternalDisplay && !isInternalDisplayOff` (only the off-direction needs an external). Tooltip differs per state. |
-| Hint / error | caption row | If toggle disabled: "Connect an external display to turn this off." Else if `lastError`: warning triangle + error text. Otherwise hidden. |
+| Display | row: "Blackout" + switch | Switch is ON when blackout is active **or pending** (`isBlackoutShownActive = isInternalDisplayOff || isBlackoutPending`, so it doesn't bounce off-then-on while mirroring is stopped); flipping it off while pending cancels the pending blackout. Writes through `DisplayStateViewModel.setBlackoutActive(_:)`, which no-ops if the state already matches (auto-revert can flip state under a stale click). Disabled when `!hasExternalDisplay && !isBlackoutShownActive` (only the off-direction needs an external). `hasExternalDisplay` counts a usable external **or** a hardware-mirrored one (blackout stops mirroring first), so a mirrored-only setup no longer disables the switch. Tooltip differs per state. |
+| Hint / error | caption row | If toggle disabled: "Connect an external display to turn this off." Else if `lastError`: warning triangle + error text (e.g. "Couldn't stop screen mirroring. Turn off Mirror in System Settings → Displays." when un-mirroring fails or times out). Otherwise hidden. |
 | Divider | | |
 | Auto-Blackout | row: "Auto-Blackout" + switch + caption | "Re-blackout automatically when your external display reconnects." Preference persisted. |
 | Divider | | |

@@ -12,7 +12,9 @@ Single-repo product; all paths below are relative to the repo root (`mac-app-bla
 | `isInternalDisplayOff` (runtime) | `Sources/SasihCore/DisplayManager.swift` | `DisplayManager` | `Tests/SasihCoreTests/DisplayManagerTests.swift` |
 | `internalOnIsFallback` (runtime) | same | `DisplayManager.performEmergencyCheckIfNeeded()` / `handleWake()` | `DisplayManagerTests` |
 | `isInternalDisplayOff` (UI mirror) | `Sources/SasihApp/DisplayStateViewModel.swift` | `DisplayStateViewModel` | `Tests/SasihAppTests/DisplayStateViewModelTests.swift` |
+| `isBlackoutPendingUnmirror` / `unmirrorDeadline` (runtime) | `Sources/SasihCore/DisplayManager.swift` | `disableInternalDisplay()` / `performEmergencyCheckIfNeeded()` / `toggle()` | `DisplayManagerTests` |
 | `hasExternalDisplay` (UI mirror) | same | `DisplayStateViewModel.refresh()` | `DisplayStateViewModelTests` |
+| `isBlackoutPending` / `isBlackoutShownActive` (UI mirror) | `Sources/SasihApp/DisplayStateViewModel.swift` | `DisplayStateViewModel.refresh()` | `DisplayStateViewModelTests` |
 
 ## Rules for future changes
 

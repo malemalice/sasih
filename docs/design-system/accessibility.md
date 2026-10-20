@@ -7,7 +7,7 @@
 | The menu-bar glyph conveys state to VoiceOver | `Image(...).accessibilityLabel("Sasih — internal display off" / "Sasih — internal display on")` in `SasihApp.swift` |
 | Text contrast in light/dark mode | Semantic colours (`.secondary`, label colours) adapt automatically |
 | Hit targets | Native `Toggle(.switch)` and full-width `MenuRow` buttons (≥ 22 pt) |
-| State is not colour-only | Status caption is textual ("Blackout active" / "Standing by") in addition to the glyph and switch |
+| State is not colour-only | Status caption is textual ("Blackout active" / "Starting blackout…" / "Standing by") in addition to the glyph and switch |
 
 ## Rules for new UI
 

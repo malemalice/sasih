@@ -34,7 +34,23 @@ CGCompleteDisplayConfiguration(configRef, .forSession)      // public
 | `displayID` | The cached internal `CGDirectDisplayID` (must be persisted *before* a disable) |
 | Enabled value | `Int32` — `1` enable, `0` disable |
 | Return | `CGError`; any non-`.success` aborts the transaction and `setDisplay` returns `false` |
-| Precondition | Never issue a change for a display already in the target state (fails the whole transaction) — see `DisplayStateDiff` |
+| Precondition | Never issue a change for a display already in the target state (fails the whole transaction) — see `DisplayStateDiff`. `disableInternalDisplay()` checks the panel is absent from the online list; `enableInternalDisplay()` deliberately always attempts the call (the online list can hold a ghost builtin entry) and, if the call is rejected, treats the builtin being online as success |
+
+## A.1b Stop mirroring (public CoreGraphics, added 2026-10-20)
+
+```
+CGBeginDisplayConfiguration(&configRef)
+  CGConfigureDisplayMirrorOfDisplay(configRef, id, kCGNullDirectDisplay)   // per mirrored external id
+CGCompleteDisplayConfiguration(configRef, .forSession)
+  ↳ on a per-id non-success: CGCancelDisplayConfiguration(configRef)
+```
+
+| Property | Value |
+|---|---|
+| Caller | `DisplayManager.disableInternalDisplay()`, only when the usable-external guard refuses and `mirroredExternalDisplayIDs()` is non-empty |
+| Effect | Takes the externals out of their mirror set for this login session; both screens stay on. `.forSession` → user's mirror preference returns at next login |
+| Return | `Bool` (`stopMirroring(_:)`); `false` on empty ids or any non-`.success` |
+| Not a disable | Never darkens a display; the blackout itself is still A.1, applied later by the guarded disable once the external is drawable |
 
 ## A.2 Display queries (public CoreGraphics)
 
@@ -42,6 +58,7 @@ CGCompleteDisplayConfiguration(configRef, .forSession)      // public
 |---|---|
 | `CGGetOnlineDisplayList` / provider equivalent | Current online display IDs (`DisplayInfoProviding.onlineDisplayIDs()`) |
 | `CGDisplayIsBuiltin` | Identify the internal display (`isBuiltin(_:)`) |
+| `CGDisplayIsInMirrorSet` (+ online minus active, non-builtin) | Hardware-mirrored externals (`mirroredExternalDisplayIDs()`, added 2026-10-20) — online but not drawable |
 | `CGDisplayRegisterReconfigurationCallback` | Observe external plug/unplug; ignore `.beginConfigurationFlag` events |
 
 Note: the provider filters a WindowServer synthetic placeholder ID out of the online list — an empty list is the intended signature of a genuine unplug.

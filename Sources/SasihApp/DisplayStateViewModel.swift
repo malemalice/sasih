@@ -8,6 +8,9 @@ final class DisplayStateViewModel: ObservableObject {
     private let stayAwake: StayAwake
     @Published private(set) var isInternalDisplayOff: Bool
     @Published private(set) var lastError: String?
+    /// Blackout was requested and is waiting for a mirrored external to
+    /// become a separate display; shown as "on" so the switch doesn't bounce.
+    @Published private(set) var isBlackoutPending: Bool
     @Published private(set) var hasExternalDisplay: Bool
     @Published var autoRevertOnReconnectEnabled: Bool {
         didSet { manager.autoRevertOnReconnectEnabled = autoRevertOnReconnectEnabled }
@@ -26,7 +29,8 @@ final class DisplayStateViewModel: ObservableObject {
         self.stayAwake = stayAwake
         self.isInternalDisplayOff = manager.isInternalDisplayOff
         self.lastError = manager.lastError
-        self.hasExternalDisplay = manager.usableExternalDisplayCount > 0
+        self.isBlackoutPending = manager.isBlackoutPendingUnmirror
+        self.hasExternalDisplay = Self.blackoutPossible(manager)
         self.autoRevertOnReconnectEnabled = manager.autoRevertOnReconnectEnabled
         self.stayAwakeEnabled = stayAwake.isEnabled
     }
@@ -34,7 +38,18 @@ final class DisplayStateViewModel: ObservableObject {
     func refresh() {
         isInternalDisplayOff = manager.isInternalDisplayOff
         lastError = manager.lastError
-        hasExternalDisplay = manager.usableExternalDisplayCount > 0
+        isBlackoutPending = manager.isBlackoutPendingUnmirror
+        hasExternalDisplay = Self.blackoutPossible(manager)
+    }
+
+    /// What the Blackout switch shows: on once applied or while pending.
+    var isBlackoutShownActive: Bool {
+        isInternalDisplayOff || isBlackoutPending
+    }
+
+    /// A mirrored external still counts: blackout stops mirroring first.
+    private static func blackoutPossible(_ manager: DisplayManager) -> Bool {
+        manager.usableExternalDisplayCount > 0 || manager.mirroredExternalDisplayCount > 0
     }
 
     func toggle() {
@@ -51,7 +66,7 @@ final class DisplayStateViewModel: ObservableObject {
     /// keeps this intent-based: if the state changed since the switch was
     /// rendered (e.g. auto-revert), a stale click can't invert the outcome.
     func setBlackoutActive(_ isActive: Bool) {
-        guard isActive != isInternalDisplayOff else { return }
+        guard isActive != isBlackoutShownActive else { return }
         toggle()
     }
 }

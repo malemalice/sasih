@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import os
 
 /// Single source of truth for "is the internal display off." All dependencies
@@ -29,6 +30,19 @@ public final class DisplayManager {
     /// In-memory only — a fresh launch has no fallback to reconcile.
     private var internalOnIsFallback = false
 
+    /// True while a blackout is waiting for a mirrored external to become a
+    /// separate, drawable display (we asked macOS to stop mirroring). The
+    /// blackout itself is only applied once that external is actually usable,
+    /// through the normal guarded disable path. In-memory only.
+    public private(set) var isBlackoutPendingUnmirror = false
+    private var unmirrorDeadline: TimeInterval?
+    /// Monotonic seconds (system uptime), so wall-clock changes can't skew
+    /// the un-mirroring timeout.
+    private let now: () -> TimeInterval
+
+    /// How long to wait for macOS to finish un-mirroring before giving up.
+    static let unmirrorTimeout: TimeInterval = 15
+
     /// User preference: automatically restore "internal off" once an external
     /// display reconnects after we fell back to the internal display.
     public var autoRevertOnReconnectEnabled: Bool {
@@ -39,11 +53,13 @@ public final class DisplayManager {
     public init(
         configurer: DisplayConfiguring,
         infoProvider: DisplayInfoProviding,
-        idStore: DisplayIDPersisting
+        idStore: DisplayIDPersisting,
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
         self.configurer = configurer
         self.infoProvider = infoProvider
         self.idStore = idStore
+        self.now = now
         self.cachedInternalDisplayID = idStore.load()
         self.isInternalDisplayOff = idStore.loadOffState()
         logger.notice("init: cachedInternalDisplayID=\(String(describing: self.cachedInternalDisplayID), privacy: .public) isInternalDisplayOff=\(self.isInternalDisplayOff, privacy: .public)")
@@ -58,6 +74,12 @@ public final class DisplayManager {
     /// `DisplayInfoProviding.usableExternalDisplayCount`).
     public var usableExternalDisplayCount: Int {
         infoProvider.usableExternalDisplayCount()
+    }
+
+    /// Externals that are only mirroring the built-in display. Blackout can
+    /// still be turned on with one of these: it stops mirroring first.
+    public var mirroredExternalDisplayCount: Int {
+        infoProvider.mirroredExternalDisplayIDs().count
     }
 
     @discardableResult
@@ -79,6 +101,22 @@ public final class DisplayManager {
         }
 
         guard DisplayGuards.canDisableInternal(usableExternalDisplayCount: usableExternalCount) else {
+            // A mirrored external is a real screen, just not a drawable one
+            // yet. Stop mirroring (both screens stay on) and let the emergency
+            // check apply the blackout once it is usable — never before.
+            let mirroredIDs = infoProvider.mirroredExternalDisplayIDs()
+            if !mirroredIDs.isEmpty {
+                if configurer.stopMirroring(mirroredIDs) {
+                    isBlackoutPendingUnmirror = true
+                    unmirrorDeadline = now() + Self.unmirrorTimeout
+                    lastError = nil
+                    logger.notice("disableInternalDisplay: external mirrored (mirroredIDs=\(mirroredIDs, privacy: .public)) — stopped mirroring, blackout pending")
+                } else {
+                    lastError = "Couldn't stop screen mirroring. Turn off Mirror in System Settings → Displays."
+                    logger.notice("disableInternalDisplay: stopMirroring FAILED mirroredIDs=\(mirroredIDs, privacy: .public)")
+                }
+                return false
+            }
             lastError = "No external display detected."
             logger.notice("disableInternalDisplay: refused — no drawable external display (onlineIDs=\(onlineIDs, privacy: .public) activeIDs=\(activeIDs, privacy: .public))")
             return false
@@ -112,6 +150,10 @@ public final class DisplayManager {
 
     @discardableResult
     public func enableInternalDisplay() -> Bool {
+        // Deliberately no "already online → skip" shortcut here: the online
+        // list can retain a ghost/non-drawable builtin entry, and trusting it
+        // would silently skip a real restore and leave the panel dark. Always
+        // attempt the enable and reconcile with reality only if it fails.
         guard let internalID = cachedInternalDisplayID ?? idStore.load() else {
             lastError = "Internal display ID unknown — cannot restore."
             logger.notice("enableInternalDisplay: failed — internal display ID unknown")
@@ -119,23 +161,39 @@ public final class DisplayManager {
         }
 
         guard configurer.setDisplay(internalID, enabled: true) else {
+            // SkyLight fails a transaction for a display already in the target
+            // state. That used to strand a persisted off-state forever after a
+            // reboot (the reboot restores the panel, UserDefaults does not), so
+            // every launch/retry surfaced "Failed to enable internal display."
+            // for a panel that was visibly on. The panel can also come back
+            // concurrently (macOS reconfigures asynchronously). Either way,
+            // re-read reality before declaring failure.
+            let onlineAfterFailure = infoProvider.onlineDisplayIDs()
+            if let liveInternalID = builtinDisplayID(in: onlineAfterFailure) {
+                recordEnabledState(liveInternalID)
+                logger.notice("enableInternalDisplay: internalID=\(internalID, privacy: .public) setDisplay(true) failed but panel is online — recorded on state")
+                return true
+            }
             lastError = "Failed to enable internal display."
-            logger.notice("enableInternalDisplay: internalID=\(internalID, privacy: .public) setDisplay(true) FAILED")
+            logger.notice("enableInternalDisplay: internalID=\(internalID, privacy: .public) setDisplay(true) FAILED onlineIDs=\(onlineAfterFailure, privacy: .public)")
             return false
         }
 
-        isInternalDisplayOff = false
-        idStore.saveOffState(false)
-        lastError = nil
+        recordEnabledState(internalID)
         logger.notice("enableInternalDisplay: internalID=\(internalID, privacy: .public) enabled successfully")
         return true
     }
 
     public func toggle() {
-        logger.notice("toggle: isInternalDisplayOff=\(self.isInternalDisplayOff, privacy: .public) (before)")
+        logger.notice("toggle: isInternalDisplayOff=\(self.isInternalDisplayOff, privacy: .public) isBlackoutPendingUnmirror=\(self.isBlackoutPendingUnmirror, privacy: .public) (before)")
         // A manual toggle is always a deliberate choice — it overrides
         // whatever fallback state we were tracking.
         internalOnIsFallback = false
+        // Toggling while a blackout is pending means "never mind".
+        if isBlackoutPendingUnmirror {
+            clearPendingUnmirror()
+            return
+        }
         if isInternalDisplayOff {
             enableInternalDisplay()
         } else {
@@ -174,6 +232,26 @@ public final class DisplayManager {
             return
         }
 
+        if isBlackoutPendingUnmirror {
+            if usableExternalCount > 0 {
+                clearPendingUnmirror()
+                logger.notice("performEmergencyCheckIfNeeded: mirrored external is now drawable — applying pending blackout")
+                // Every disable guard re-runs here; nothing is bypassed.
+                if disableInternalDisplay() {
+                    internalOnIsFallback = false
+                }
+            } else if let deadline = unmirrorDeadline, now() >= deadline {
+                clearPendingUnmirror()
+                lastError = "Couldn't stop screen mirroring. Turn off Mirror in System Settings → Displays."
+                logger.notice("performEmergencyCheckIfNeeded: pending blackout timed out — external never became drawable")
+            } else if isInternalDisplayOnline(in: onlineIDs) {
+                // Waiting is only safe while the panel is visibly on; otherwise
+                // fall through to the normal restore logic below.
+                logger.notice("performEmergencyCheckIfNeeded: blackout pending — waiting for the external to finish un-mirroring")
+                return
+            }
+        }
+
         // The panel being absent from the online list is ground truth that it
         // is off. Record that instead of trusting the recorded on-state: the
         // reapply-off below would otherwise call disableInternalDisplay() for
@@ -201,7 +279,11 @@ public final class DisplayManager {
             return
         }
 
-        guard internalOnIsFallback, autoRevertOnReconnectEnabled, usableExternalCount > 0 else { return }
+        // A reconnected external that macOS put back into mirroring counts too:
+        // the disable path stops mirroring first and applies blackout once the
+        // external is drawable.
+        let externalReconnected = usableExternalCount > 0 || !infoProvider.mirroredExternalDisplayIDs().isEmpty
+        guard internalOnIsFallback, autoRevertOnReconnectEnabled, externalReconnected else { return }
         logger.notice("performEmergencyCheckIfNeeded: drawable external reconnected after fallback — reapplying off")
         if disableInternalDisplay() {
             internalOnIsFallback = false
@@ -259,8 +341,31 @@ public final class DisplayManager {
         enableInternalDisplay()
     }
 
+    private func clearPendingUnmirror() {
+        isBlackoutPendingUnmirror = false
+        unmirrorDeadline = nil
+    }
+
     private func isInternalDisplayOnline(in onlineIDs: [CGDirectDisplayID]) -> Bool {
-        onlineIDs.contains(where: infoProvider.isBuiltin)
+        builtinDisplayID(in: onlineIDs) != nil
+    }
+
+    private func builtinDisplayID(in onlineIDs: [CGDirectDisplayID]) -> CGDirectDisplayID? {
+        onlineIDs.first(where: infoProvider.isBuiltin)
+    }
+
+    /// Records "on" consistently across memory, UserDefaults, and the ID cache.
+    /// A live builtin is the authoritative ID, so it also refreshes a stale
+    /// persisted one (e.g. from an earlier boot topology) that would otherwise
+    /// break a later restore.
+    private func recordEnabledState(_ id: CGDirectDisplayID) {
+        if cachedInternalDisplayID != id {
+            cachedInternalDisplayID = id
+            idStore.save(id)
+        }
+        isInternalDisplayOff = false
+        idStore.saveOffState(false)
+        lastError = nil
     }
 
     private func resolveInternalDisplayID(from onlineIDs: [CGDirectDisplayID]) -> CGDirectDisplayID? {

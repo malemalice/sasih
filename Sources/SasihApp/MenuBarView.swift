@@ -8,7 +8,7 @@ struct MenuBarView: View {
 
     var toggleBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.isInternalDisplayOff },
+            get: { viewModel.isBlackoutShownActive },
             set: { viewModel.setBlackoutActive($0) }
         )
     }
@@ -16,11 +16,12 @@ struct MenuBarView: View {
     /// Turning the display off requires an external one connected; turning
     /// it back on is always safe, so only the off-direction gets blocked.
     private var toggleDisabled: Bool {
-        !viewModel.isInternalDisplayOff && !viewModel.hasExternalDisplay
+        !viewModel.isBlackoutShownActive && !viewModel.hasExternalDisplay
     }
 
     private var statusCaption: String {
-        viewModel.isInternalDisplayOff ? "Blackout active" : "Standing by"
+        if viewModel.isInternalDisplayOff { return "Blackout active" }
+        return viewModel.isBlackoutPending ? "Starting blackout…" : "Standing by"
     }
 
     var body: some View {
@@ -173,7 +174,9 @@ struct MenuBarView: View {
                 .toggleStyle(.switch)
                 .disabled(toggleDisabled)
                 .help(
-                    viewModel.isInternalDisplayOff
+                    viewModel.isBlackoutPending
+                        ? "Cancels turning off your MacBook's screen."
+                        : viewModel.isInternalDisplayOff
                         ? "Turns your MacBook's screen back on."
                         : "Turns off your MacBook's screen right away — no need to close the lid."
                 )

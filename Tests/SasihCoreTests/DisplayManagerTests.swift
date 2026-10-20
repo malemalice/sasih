@@ -5,10 +5,20 @@ import Testing
 private final class FakeConfigurer: DisplayConfiguring {
     var shouldSucceed = true
     var calls: [(id: CGDirectDisplayID, enabled: Bool)] = []
+    var onCall: (() -> Void)?
 
     func setDisplay(_ id: CGDirectDisplayID, enabled: Bool) -> Bool {
         calls.append((id, enabled))
+        onCall?()
         return shouldSucceed
+    }
+
+    var stopMirroringSucceeds = true
+    var stopMirroringCalls: [[CGDirectDisplayID]] = []
+
+    func stopMirroring(_ ids: [CGDirectDisplayID]) -> Bool {
+        stopMirroringCalls.append(ids)
+        return stopMirroringSucceeds
     }
 }
 
@@ -22,6 +32,10 @@ private final class FakeInfoProvider: DisplayInfoProviding {
     func onlineDisplayIDs() -> [CGDirectDisplayID] { Array(online.keys) }
     func activeDisplayIDs() -> [CGDirectDisplayID] { Array(active ?? Set(online.keys)) }
     func isBuiltin(_ id: CGDirectDisplayID) -> Bool { online[id] ?? false }
+
+    /// Externals reported as hardware-mirroring the builtin.
+    var mirrored: [CGDirectDisplayID] = []
+    func mirroredExternalDisplayIDs() -> [CGDirectDisplayID] { mirrored }
 }
 
 private final class FakeIDStore: DisplayIDPersisting {
@@ -42,9 +56,134 @@ final class DisplayManagerTests {
     private let infoProvider = FakeInfoProvider()
     private let idStore = FakeIDStore()
     private let manager: DisplayManager
+    private var clock: Double = 0
 
     init() {
         manager = DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore)
+    }
+
+    /// Builtin 1 on; external 2 online but only mirroring it (not drawable).
+    private func makeMirroredManager() -> DisplayManager {
+        infoProvider.online = [1: true, 2: false]
+        infoProvider.active = [1]
+        infoProvider.mirrored = [2]
+        return DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore, now: { self.clock })
+    }
+
+    /// What macOS does once mirroring stops: the external becomes drawable.
+    private func finishUnmirroring() {
+        infoProvider.active = [1, 2]
+        infoProvider.mirrored = []
+    }
+
+    @Test func disableWithMirroredExternalStopsMirroringAndWaits() {
+        let mirroredManager = makeMirroredManager()
+
+        #expect(mirroredManager.disableInternalDisplay() == false)
+        #expect(configurer.stopMirroringCalls == [[2]])
+        #expect(mirroredManager.isBlackoutPendingUnmirror == true)
+        #expect(mirroredManager.lastError == nil)
+        // Never black out before the external is actually drawable.
+        #expect(configurer.calls.isEmpty)
+        #expect(mirroredManager.isInternalDisplayOff == false)
+    }
+
+    @Test func pendingBlackoutWaitsWhileExternalIsStillMirrored() {
+        let mirroredManager = makeMirroredManager()
+        _ = mirroredManager.disableInternalDisplay()
+
+        mirroredManager.performEmergencyCheckIfNeeded()
+
+        #expect(mirroredManager.isBlackoutPendingUnmirror == true)
+        #expect(configurer.calls.isEmpty)
+        #expect(configurer.stopMirroringCalls.count == 1)
+    }
+
+    @Test func pendingBlackoutAppliesOnceExternalIsDrawable() {
+        let mirroredManager = makeMirroredManager()
+        _ = mirroredManager.disableInternalDisplay()
+        finishUnmirroring()
+
+        mirroredManager.performEmergencyCheckIfNeeded()
+
+        #expect(mirroredManager.isBlackoutPendingUnmirror == false)
+        #expect(mirroredManager.isInternalDisplayOff == true)
+        #expect(idStore.storedOffState == true)
+        #expect(configurer.calls.last?.id == 1)
+        #expect(configurer.calls.last?.enabled == false)
+    }
+
+    @Test func pendingBlackoutDefersWhileScreensAsleep() {
+        let mirroredManager = makeMirroredManager()
+        _ = mirroredManager.disableInternalDisplay()
+        finishUnmirroring()
+
+        mirroredManager.performEmergencyCheckIfNeeded(screensAreAsleep: true)
+
+        #expect(mirroredManager.isBlackoutPendingUnmirror == true)
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func pendingBlackoutGivesUpAfterTimeout() {
+        let mirroredManager = makeMirroredManager()
+        _ = mirroredManager.disableInternalDisplay()
+
+        clock += DisplayManager.unmirrorTimeout + 1
+        mirroredManager.performEmergencyCheckIfNeeded()
+
+        #expect(mirroredManager.isBlackoutPendingUnmirror == false)
+        #expect(mirroredManager.isInternalDisplayOff == false)
+        #expect(mirroredManager.lastError?.hasPrefix("Couldn't stop screen mirroring.") == true)
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func stopMirroringFailureSurfacesErrorAndLeavesPanelOn() {
+        configurer.stopMirroringSucceeds = false
+        let mirroredManager = makeMirroredManager()
+
+        #expect(mirroredManager.disableInternalDisplay() == false)
+        #expect(mirroredManager.isBlackoutPendingUnmirror == false)
+        #expect(mirroredManager.lastError?.hasPrefix("Couldn't stop screen mirroring.") == true)
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func toggleWhileBlackoutPendingCancelsIt() {
+        let mirroredManager = makeMirroredManager()
+        mirroredManager.toggle()
+        #expect(mirroredManager.isBlackoutPendingUnmirror == true)
+
+        mirroredManager.toggle()
+        #expect(mirroredManager.isBlackoutPendingUnmirror == false)
+
+        finishUnmirroring()
+        mirroredManager.performEmergencyCheckIfNeeded()
+        #expect(mirroredManager.isInternalDisplayOff == false)
+        #expect(configurer.calls.isEmpty)
+    }
+
+    @Test func autoRevertStopsMirroringWhenExternalReconnectsMirrored() {
+        infoProvider.online = [1: true, 2: false]
+        let reconnectManager = DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore, now: { self.clock })
+        _ = reconnectManager.disableInternalDisplay()
+
+        // External unplugged → fallback restore.
+        infoProvider.online = [:]
+        reconnectManager.performEmergencyCheckIfNeeded()
+        #expect(reconnectManager.isInternalDisplayOff == false)
+
+        // macOS reconnects it in mirror mode.
+        infoProvider.online = [1: true, 2: false]
+        infoProvider.active = [1]
+        infoProvider.mirrored = [2]
+        configurer.calls.removeAll()
+        reconnectManager.performEmergencyCheckIfNeeded()
+        #expect(configurer.stopMirroringCalls == [[2]])
+        #expect(configurer.calls.isEmpty)
+
+        finishUnmirroring()
+        reconnectManager.performEmergencyCheckIfNeeded()
+        #expect(reconnectManager.isInternalDisplayOff == true)
+        #expect(configurer.calls.last?.enabled == false)
     }
 
     @Test func disableRefusedWithNoExternalDisplay() {
@@ -80,16 +219,128 @@ final class DisplayManagerTests {
     @Test func enableRestoresUsingCachedID() {
         infoProvider.online = [1: true, 2: false]
         _ = manager.disableInternalDisplay()
+        infoProvider.online = [2: false] // the panel is now absent from the online list
+        configurer.calls.removeAll()
+
         #expect(manager.enableInternalDisplay() == true)
         #expect(manager.isInternalDisplayOff == false)
         #expect(idStore.storedOffState == false)
+        #expect(configurer.calls.last?.id == 1)
+        #expect(configurer.calls.last?.enabled == true)
+    }
+
+    @Test func enableWhenPanelAlreadyOnlineHealsAfterRejectedNoOp() {
+        // Field scenario: the user rebooted while "off" was persisted. The
+        // reboot cleared the WindowServer disable (panel is visibly on) but
+        // UserDefaults still says off. SkyLight rejects the no-op enable; the
+        // recorded state must still converge instead of erroring forever.
+        idStore.storedID = 1
+        idStore.storedOffState = true
+        infoProvider.online = [1: true]
+        configurer.shouldSucceed = false // SkyLight rejects a no-op change
+
+        let rebootedManager = DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore)
+        #expect(rebootedManager.isInternalDisplayOff == true)
+
+        #expect(rebootedManager.enableInternalDisplay() == true)
+        #expect(rebootedManager.isInternalDisplayOff == false)
+        #expect(rebootedManager.lastError == nil)
+        #expect(idStore.storedOffState == false)
+        #expect(configurer.calls.count == 1)
+    }
+
+    @Test func restoreOnLaunchHealsStaleOffStateAfterReboot() {
+        idStore.storedID = 1
+        idStore.storedOffState = true
+        infoProvider.online = [1: true]
+        configurer.shouldSucceed = false
+
+        let rebootedManager = DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore)
+        rebootedManager.restoreOnLaunchIfNeeded()
+
+        #expect(rebootedManager.isInternalDisplayOff == false)
+        #expect(rebootedManager.lastError == nil)
+        #expect(idStore.storedOffState == false)
+        #expect(configurer.calls.count == 1)
+    }
+
+    @Test func enableRefreshesStaleCachedIDFromOnlineBuiltin() {
+        idStore.storedID = 99 // stale ID from an earlier boot topology
+        idStore.storedOffState = true
+        infoProvider.online = [1: true]
+        configurer.shouldSucceed = false
+
+        let rebootedManager = DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore)
+        #expect(rebootedManager.enableInternalDisplay() == true)
+
+        #expect(idStore.storedID == 1)
+        #expect(configurer.calls.map(\.id) == [99])
+    }
+
+    @Test func enableStillAttemptsHardwareRestoreWhenOnlineListShowsPanel() {
+        // The online list can retain a ghost/non-drawable builtin entry right
+        // after a disable. Trusting it would skip the restore and leave the
+        // panel dark, so the enable must always reach the hardware.
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        configurer.calls.removeAll()
+
+        #expect(manager.enableInternalDisplay() == true)
+        #expect(configurer.calls.count == 1)
+        #expect(configurer.calls.last?.id == 1)
+        #expect(configurer.calls.last?.enabled == true)
+    }
+
+    @Test func enableTreatsPanelAppearingAfterFailedTransactionAsSuccess() {
+        idStore.storedID = 1
+        idStore.storedOffState = true
+        infoProvider.online = [:] // panel offline when the attempt starts
+        configurer.shouldSucceed = false
+
+        let rebootedManager = DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore)
+        // macOS restores the panel concurrently with our failed transaction.
+        configurer.onCall = { self.infoProvider.online = [1: true] }
+
+        #expect(rebootedManager.enableInternalDisplay() == true)
+        #expect(rebootedManager.isInternalDisplayOff == false)
+        #expect(rebootedManager.lastError == nil)
+        #expect(idStore.storedOffState == false)
+    }
+
+    @Test func enableFailureWhenPanelStaysOffSurfacesError() {
+        idStore.storedID = 1
+        idStore.storedOffState = true
+        infoProvider.online = [:]
+        configurer.shouldSucceed = false
+
+        let rebootedManager = DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore)
+
+        #expect(rebootedManager.enableInternalDisplay() == false)
+        #expect(rebootedManager.lastError == "Failed to enable internal display.")
+        #expect(rebootedManager.isInternalDisplayOff == true)
+        #expect(idStore.storedOffState == true)
+    }
+
+    @Test func emergencyCheckHealsStateWhenPanelIsAlreadyOn() {
+        idStore.storedID = 1
+        idStore.storedOffState = true
+        infoProvider.online = [1: true]
+        configurer.shouldSucceed = false
+
+        let rebootedManager = DisplayManager(configurer: configurer, infoProvider: infoProvider, idStore: idStore)
+        rebootedManager.performEmergencyCheckIfNeeded()
+
+        #expect(rebootedManager.isInternalDisplayOff == false)
+        #expect(idStore.storedOffState == false)
+        #expect(rebootedManager.lastError == nil)
     }
 
     @Test func emergencyCheckRestoresWhenExternalDisappears() {
         infoProvider.online = [1: true, 2: false]
         _ = manager.disableInternalDisplay()
 
-        infoProvider.online = [1: true] // external unplugged
+        infoProvider.online = [:] // external unplugged; the panel is already offline
+        configurer.calls.removeAll()
         manager.performEmergencyCheckIfNeeded()
 
         #expect(manager.isInternalDisplayOff == false)
@@ -103,10 +354,12 @@ final class DisplayManagerTests {
     }
 
     @Test func restoreOnLaunchRecoversFromCrash() {
-        // Simulate a previous session that crashed while the display was off.
+        // Simulate a previous session that crashed while the display was off:
+        // the panel is still absent from the online list (the disable lasts
+        // until reboot).
         idStore.storedID = 1
         idStore.storedOffState = true
-        infoProvider.online = [1: true, 2: false]
+        infoProvider.online = [2: false]
 
         manager.restoreOnLaunchIfNeeded()
 

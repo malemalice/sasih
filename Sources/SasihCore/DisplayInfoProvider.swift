@@ -13,9 +13,17 @@ public protocol DisplayInfoProviding {
     func activeDisplayIDs() -> [CGDirectDisplayID]
 
     func isBuiltin(_ id: CGDirectDisplayID) -> Bool
+
+    /// Externals that are online but not drawable because they are only
+    /// hardware-mirroring another display (System Settings → Displays →
+    /// "Mirror"). They are a real screen the user can see, but blackout can't
+    /// rely on them until mirroring is stopped.
+    func mirroredExternalDisplayIDs() -> [CGDirectDisplayID]
 }
 
 public extension DisplayInfoProviding {
+    func mirroredExternalDisplayIDs() -> [CGDirectDisplayID] { [] }
+
     func builtinDisplayID() -> CGDirectDisplayID? {
         onlineDisplayIDs().first(where: isBuiltin)
     }
@@ -68,6 +76,13 @@ public struct CGDisplayInfoProvider: DisplayInfoProviding {
 
     public func isBuiltin(_ id: CGDirectDisplayID) -> Bool {
         CGDisplayIsBuiltin(id) != 0
+    }
+
+    public func mirroredExternalDisplayIDs() -> [CGDirectDisplayID] {
+        let active = Set(activeDisplayIDs())
+        return onlineDisplayIDs().filter {
+            !isBuiltin($0) && !active.contains($0) && CGDisplayIsInMirrorSet($0) != 0
+        }
     }
 
     private static func displayList(

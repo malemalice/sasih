@@ -13,6 +13,7 @@
    │      enableInternalDisplay()         │
    └──────────────────────────────────────┘
         (always safe; used by all restore paths)
+        If the call is rejected but the panel is online, records ON.
 
 Fallback sub-state (only reachable from OFF):
 [OFF] + usable external gone (no drawable external; callback or 10s backstop)
@@ -23,10 +24,27 @@ Fallback sub-state (only reachable from OFF):
    → disableInternalDisplay(), internalOnIsFallback = false
 [ON·fallback] + any manual toggle
    → internalOnIsFallback = false (user chose deliberately)
+
+Pending-unmirror sub-state (added 2026-10-20; only reachable from ON):
+[ON] + disable requested, no usable external, mirrored external present
+   → stopMirroring(ids) ok → isBlackoutPendingUnmirror = true, deadline = now + 15 s
+   → state is [ON·pending]   (both screens on; no SkyLight call yet)
+   → stopMirroring fails   → stay [ON], lastError = "Couldn't stop screen mirroring…"
+[ON·pending] + usable external appears (emergency check, after sleep deferral)
+   → clear pending → disableInternalDisplay() (all guards re-run) → [OFF]
+[ON·pending] + deadline passed
+   → clear pending, lastError = "Couldn't stop screen mirroring…" → [ON]
+[ON·pending] + builtin not online → fall through to normal reconciliation/restore
+[ON·pending] + any manual toggle
+   → clear pending ("never mind") → [ON]
+[ON·fallback] + mirrored external reappears + Auto-Blackout enabled
+   → disableInternalDisplay() → [ON·pending] (un-mirror first)
 ```
 
 **"Usable external"** (used by every guard/restore/auto-revert decision) = online **and**
-drawable (`CGDisplayIsActive` — connected, awake, available for drawing). The online list is a
+drawable (`CGDisplayIsActive` — connected, awake, available for drawing). A **mirrored external**
+(online, non-builtin, not active, `CGDisplayIsInMirrorSet`) is not usable, but since 2026-10-20 it
+makes blackout *possible*: the disable path stops mirroring first and applies once it is drawable. The online list is a
 superset that can retain stale/ghost or non-drawable hardware-mirror entries; treating those as
 a working screen is what stranded users (field incident 2026-09-21). While the screens are in
 display sleep nothing is drawable — so emergency checks are deferred (`screensAreAsleep`) rather
@@ -38,6 +56,7 @@ The panel being **absent from the online list is ground truth that it is off** �
 state must converge to it, not the other way around:
 
 - `disableInternalDisplay()` when the panel is already offline: record `isInternalDisplayOff = true` + persist, return `true`, **no hardware call**. (Also avoids a doomed transaction and a permanent last-active-display refusal.)
+- `enableInternalDisplay()` always attempts the hardware call — there is deliberately no "already online → skip" shortcut, because the online list can retain a ghost/non-drawable builtin entry and trusting it would silently leave the panel dark. If the transaction fails, re-read the online list once: if the builtin is online, record `isInternalDisplayOff = false` + persist, clear `lastError`, refresh the cached display ID from the live builtin, return `true`. This heals the reboot case where WindowServer cleared the disable but UserDefaults retained `IsInternalDisplayOff = true` (the no-op transaction is rejected forever otherwise, and the menu shows "Failed to enable internal display." for a panel that is visibly on), and covers a concurrent macOS restore.
 - `performEmergencyCheckIfNeeded(screensAreAsleep:)` when state says ON but the panel is offline, and (`usableExternalCount == 0` or we're inside the fallback window): record `isInternalDisplayOff = true` + persist, clear `internalOnIsFallback`. A *drawable* external blip outside the fallback window is ignored (the online list can transiently omit the panel mid-reconfiguration) — but a merely listed, non-drawable external no longer holds the recorded state on.
 - `handleWake()` `.leaveOn`: set `internalOnIsFallback = true`; if the panel is online, record ON; if macOS did **not** restore it, call `enableInternalDisplay()` explicitly — and if that fails, keep `IsInternalDisplayOff == true` so the emergency check and launch restore keep retrying instead of claiming the panel is on.
 - While `screensAreAsleep` is true (display sleep), `performEmergencyCheckIfNeeded` changes nothing; the wake/reconfiguration events re-run it once displays are drawable again.
@@ -46,15 +65,16 @@ Single-panel helper: `isInternalDisplayOnline(in:)` (`onlineIDs.contains(where: 
 
 ## UI mutation contract
 
-`DisplayStateViewModel.setBlackoutActive(_:)` is the only way UI writes the toggle: it no-ops when the requested value equals current state, otherwise calls `toggle()`. This makes the switch **intent-based** (a stale click after an automatic change can't invert the outcome) and idempotent.
+`DisplayStateViewModel.setBlackoutActive(_:)` is the only way UI writes the toggle: it no-ops when the requested value equals the shown state (`isBlackoutShownActive = isInternalDisplayOff || isBlackoutPending`, so the switch reads on while a blackout is pending un-mirror), otherwise calls `toggle()`. This makes the switch **intent-based** (a stale click after an automatic change can't invert the outcome) and idempotent.
 
 ## Invariants
 
 1. `isInternalDisplayOff == true` ⇒ `IsInternalDisplayOff == true` in UserDefaults (same transaction, `saveOffState` on every transition). The reverse is also maintained: every enable writes `false`.
 2. `isInternalDisplayOff == true` ⇒ a usable (drawable) external display was present at the moment of disabling. It may be absent later (that triggers the emergency restore).
 3. The app never disables the last active display, and never disables without a usable external — two independent guards (`DisplayGuards.canDisableInternal` on the usable external count + `DisplayGuards.isLastActiveDisplay` on the active display count).
-4. `internalOnIsFallback` is never persisted: a fresh process starts with no fallback to reconcile.
+4. `internalOnIsFallback` is never persisted: a fresh process starts with no fallback to reconcile. The same holds for `isBlackoutPendingUnmirror` / `unmirrorDeadline` (no new UserDefaults key).
 5. While the screens are asleep, recorded state is not changed by the emergency check: display sleep makes all displays non-drawable and must not be interpreted as an unplug.
+6. Un-mirroring never sets `isInternalDisplayOff`; only a successful guarded `disableInternalDisplay()` does, so invariants 2–3 still hold for blackouts that started from a mirrored setup.
 
 ## Wake behaviour (`SleepWakeDecision`, pure)
 
@@ -69,4 +89,4 @@ back to `.leaveOn`, and Auto-Blackout re-applies once the external is actually d
 
 ## Auto-revert preference relationship
 
-`AutoRevertInternalOffOnReconnect` (persisted) is consulted **only** in the `[ON·fallback]` branch of `performEmergencyCheckIfNeeded()`. It never affects a user-initiated toggle, and never affects the emergency restore direction (restore is unconditional — no preference can keep a black-only setup).
+`AutoRevertInternalOffOnReconnect` (persisted) is consulted **only** in the `[ON·fallback]` branch of `performEmergencyCheckIfNeeded()`, which triggers on a usable external **or** a mirrored one (the disable path un-mirrors first). It never affects a user-initiated toggle, and never affects the emergency restore direction (restore is unconditional — no preference can keep a black-only setup).

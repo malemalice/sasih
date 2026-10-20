@@ -5,6 +5,15 @@ import CoreGraphics
 public protocol DisplayConfiguring {
     @discardableResult
     func setDisplay(_ id: CGDirectDisplayID, enabled: Bool) -> Bool
+
+    /// Takes the given displays out of their mirror set for the current login
+    /// session, so a mirrored external becomes a separate, drawable display.
+    /// Both screens stay on — this never makes anything dark.
+    func stopMirroring(_ ids: [CGDirectDisplayID]) -> Bool
+}
+
+public extension DisplayConfiguring {
+    func stopMirroring(_ ids: [CGDirectDisplayID]) -> Bool { false }
 }
 
 /// Real implementation: wraps the resolved private symbol in the public
@@ -31,5 +40,23 @@ public struct PrivateAPIDisplayConfigurer: DisplayConfiguring {
 
         result = CGCompleteDisplayConfiguration(configRef, .forSession)
         return result == .success
+    }
+
+    /// Public CoreGraphics API (no private symbol). `.forSession` so the
+    /// user's own mirroring preference comes back at their next login.
+    public func stopMirroring(_ ids: [CGDirectDisplayID]) -> Bool {
+        guard !ids.isEmpty else { return false }
+
+        var configRef: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&configRef) == .success else { return false }
+
+        for id in ids {
+            guard CGConfigureDisplayMirrorOfDisplay(configRef, id, kCGNullDirectDisplay) == .success else {
+                CGCancelDisplayConfiguration(configRef)
+                return false
+            }
+        }
+
+        return CGCompleteDisplayConfiguration(configRef, .forSession) == .success
     }
 }

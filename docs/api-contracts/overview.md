@@ -5,6 +5,7 @@
 - **Transport:** `dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_NOW)` + `dlsym` at runtime; never link-time.
 - **Symbol names:** `SLSConfigureDisplayEnabled` (primary) → `CGSConfigureDisplayEnabled` (fallback) — first resolvable wins.
 - **Transaction discipline:** the symbol must be called inside a public CG display-configuration transaction (`CGBeginDisplayConfiguration` → call → `CGCompleteDisplayConfiguration(.forSession)`), with `CGCancelDisplayConfiguration` on failure.
+- **Stop-mirroring call (public, added 2026-10-20):** `PrivateAPIDisplayConfigurer.stopMirroring(_:)` uses the same transaction discipline (`CGBeginDisplayConfiguration` → `CGConfigureDisplayMirrorOfDisplay(config, id, kCGNullDirectDisplay)` per id → `CGCompleteDisplayConfiguration(.forSession)`, `CGCancelDisplayConfiguration` on failure) but is **public, documented CoreGraphics API** — no private symbol, no `dlsym`. It only ever un-mirrors (both screens stay on); `.forSession` means the user's own mirror setting returns at next login. Failure degrades to `lastError`, same policy as below.
 - **Versioning policy:** none exists; Apple may change the symbol, its signature, or its error behaviour in any release. The mitigation is *graceful degradation*: if neither symbol resolves, `setDisplay` returns `false` and the UI shows `lastError` — never crash, never silently no-op, never leave a black screen.
 - **Compatibility gate:** re-verify on every macOS upgrade (see `playbooks/hardware-verification.md`). Apple Silicon + macOS 13+ only.
 

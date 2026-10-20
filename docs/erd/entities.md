@@ -4,8 +4,8 @@
 
 | Entity (UserDefaults key) | Type | Default | Written when | Read when | Purpose |
 |---|---|---|---|---|---|
-| `BackupInternalDisplayID` | `Int` (`CGDirectDisplayID` = `UInt32`) | none (absent) | just before a successful disable, and on every disable | init; `enableInternalDisplay()` fallback; `restoreOnLaunchIfNeeded()` | The internal display's ID must be cached *before* disabling — after disable it disappears from `NSScreen.screens` and can't be re-identified |
-| `IsInternalDisplayOff` | `Bool` | `false` (absent = false) | on every successful disable/enable; `handleWake()` `leaveOn` path only once the panel is verified online (or restored); emergency-check reconciliation when the online list proves the recorded state wrong | init; `handleWake()`; `restoreOnLaunchIfNeeded()` | Crash/force-quit recovery and sleep/wake state restoration |
+| `BackupInternalDisplayID` | `Int` (`CGDirectDisplayID` = `UInt32`) | none (absent) | just before a successful disable, and on every disable; refreshed from the live builtin whenever a rejected `enableInternalDisplay()` observes the panel online | init; `enableInternalDisplay()` fallback; `restoreOnLaunchIfNeeded()` | The internal display's ID must be cached *before* disabling — after disable it disappears from `NSScreen.screens` and can't be re-identified |
+| `IsInternalDisplayOff` | `Bool` | `false` (absent = false) | on every successful disable/enable; `enableInternalDisplay()` when its transaction is rejected but the panel is online (reboot/crash recovery); `handleWake()` `leaveOn` path only once the panel is verified online (or restored); emergency-check reconciliation when the online list proves the recorded state wrong | init; `handleWake()`; `restoreOnLaunchIfNeeded()` | Crash/force-quit recovery and sleep/wake state restoration |
 | `AutoRevertInternalOffOnReconnect` | `Bool` | `true` (opt-out) | when the user flips the "Auto-Blackout" toggle | init; `performEmergencyCheckIfNeeded()` | User preference: re-apply "internal off" automatically when an external display reconnects after a fallback |
 
 ## 1b. Persisted entity (`StayAwake`, `Sources/SasihApp/StayAwake.swift`)
@@ -27,9 +27,11 @@ There is intentionally **no** backup file for `IsInternalDisplayOff` — the off
 | Field | Type | Lifetime | Meaning |
 |---|---|---|---|
 | `isInternalDisplayOff` | `Bool` (`private(set)`) | process | Single source of truth for UI + safety nets |
-| `lastError` | `String?` (`private(set)`) | process | Last user-facing error ("No external display detected.", "Failed to disable internal display.", …) — cleared on success |
+| `lastError` | `String?` (`private(set)`) | process | Last user-facing error ("No external display detected.", "Failed to disable internal display.", "Couldn't stop screen mirroring. Turn off Mirror in System Settings → Displays.", …) — cleared on success |
 | `cachedInternalDisplayID` | `CGDirectDisplayID?` | process | In-memory copy of the persisted ID (loaded in `init`) |
 | `internalOnIsFallback` | `Bool` | process (never persisted) | Internal is on only because no external was present at decision time — gates auto-revert |
+| `isBlackoutPendingUnmirror` | `Bool` (`public private(set)`) | process (never persisted) | Blackout requested, mirroring stopped, waiting for the external to become drawable (added 2026-10-20) |
+| `unmirrorDeadline` | `TimeInterval?` | process (never persisted) | Monotonic (`systemUptime`) deadline, `now + unmirrorTimeout` (15 s); nil when nothing is pending |
 
 ## 4. Runtime entities (view layer)
 
@@ -37,6 +39,8 @@ There is intentionally **no** backup file for `IsInternalDisplayOff` — the off
 |---|---|---|---|
 | `DisplayStateViewModel.isInternalDisplayOff` | `@Published Bool` | `manager` | Drives menu bar icon + toggle |
 | `DisplayStateViewModel.lastError` | `@Published String?` | `manager` | Error caption row |
-| `DisplayStateViewModel.hasExternalDisplay` | `@Published Bool` | `manager.usableExternalDisplayCount > 0` | Drives disabled state of the toggle |
+| `DisplayStateViewModel.hasExternalDisplay` | `@Published Bool` | `manager.usableExternalDisplayCount > 0 \|\| manager.mirroredExternalDisplayCount > 0` | Drives disabled state of the toggle (a mirrored external still allows blackout — it is un-mirrored first) |
+| `DisplayStateViewModel.isBlackoutPending` | `@Published Bool` | `manager.isBlackoutPendingUnmirror` | "Starting blackout…" caption |
+| `DisplayStateViewModel.isBlackoutShownActive` | computed `Bool` | `isInternalDisplayOff \|\| isBlackoutPending` | Drives the Blackout switch and `setBlackoutActive` comparison (no bounce while pending) |
 | `DisplayStateViewModel.autoRevertOnReconnectEnabled` | `@Published Bool` (didSet writes through) | `manager` | Auto-Blackout toggle |
 | `DisplayStateViewModel.stayAwakeEnabled` | `@Published Bool` (didSet writes through) | `stayAwake` (`StayAwake`) | Stay Awake toggle |

@@ -25,7 +25,7 @@ Owns the user-facing surface: the menu-bar menu layout, the two icon assets, and
 
 ## Responsibilities
 
-- Specify and review menu copy: state shown in words ("Blackout active" / "Standing by"), one unambiguous verb per action, plain English.
+- Specify and review menu copy: state shown in words ("Blackout active" / "Starting blackout…" / "Standing by"), one unambiguous verb per action, plain English.
 - Maintain icon assets and their state mapping (full moon = on, hollow moon = off) per `design-system/icons.md`.
 - Keep the single-accent rule, the 280pt surface width, and the native-control conventions.
 - Update `docs/design-system/` in the same change as any UI/copy change.

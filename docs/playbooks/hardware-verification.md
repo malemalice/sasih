@@ -47,7 +47,9 @@ Record pass/fail per row, plus macOS version and app build. "Assumed from code" 
 | 17 | **Touch Bar (13" M1/M2 only)**: toggle off, then on | Touch Bar renders normally after the automatic nudge (blank-but-responsive Touch Bar = fail → see `docs/trd/mac-app-blackout/constraints-integrations.md` §5) |
 | 18 | **Display sleep with blackout active** (added 2026-09-22): toggle off with external connected, run `pmset displaysleepnow`, wait >10s (backstop ticks), then wake the displays | Blackout survives: internal stays off after wake; no unintended restore happens while the screens are asleep |
 | 19 | **Undock / ghost stress** (added 2026-09-22): toggle off with external connected, close the lid, unplug the external, open the lid elsewhere | Internal display restores within a few seconds, even if WindowServer transiently still lists the removed external |
-| 20 | **Mirrored external** (added 2026-09-22): mirror the external and the built-in, then attempt to toggle off | Never leaves a black-only setup: blackout either applies while the mirrored image stays drawable, or the toggle is refused with the connect-a-display hint — record which |
+| 20 | **Mirrored external** (added 2026-09-22, expected result updated 2026-10-20): mirror the external and the built-in (System Settings → Displays → Mirror; repeat with each display as the mirror master), then toggle Blackout on | Switch is enabled (no connect-a-display hint). Caption shows "Starting blackout…" and the switch stays on; mirroring stops automatically with both screens still on; then within a few seconds the internal panel goes dark and the external shows the desktop. If un-mirroring fails or doesn't settle within ~15 s: panel stays on and "Couldn't stop screen mirroring. Turn off Mirror in System Settings → Displays." is shown — never a black-only setup. After logout/login the user's mirror setting is back |
+| 21 | **Auto-Blackout with external reconnecting in mirror mode** (added 2026-10-20): mirror set up as in row 20, Blackout on (row 20 passes) → unplug external (auto-restore) → replug, so macOS restores mirroring, Auto-Blackout **on** | After reconnect, mirroring stops automatically and the internal panel switches back off by itself within a few seconds; no prolonged dark-only interval |
+| 22 | **Cancel while starting** (added 2026-10-20): mirror set up as in row 20, toggle Blackout on, and while the caption says "Starting blackout…" flip the switch back off | Pending blackout is cancelled: caption returns to "Standing by", internal panel stays on and no blackout follows later; displays remain extended (no re-mirror) |
 
 ## 3. Which rows a change requires
 
@@ -62,7 +64,8 @@ Record pass/fail per row, plus macOS version and app build. "Assumed from code" 
 | External-presence predicate (usable/drawable external, screen-sleep deferral) | 1–4, 8, 9, 13, 15, 16, 18, 19, 20 |
 | Touch Bar recovery | 17 (+ 1, 2) |
 | Menu bar UI only (copy/layout) | 1, 2, 13 visual checks |
-| Private SkyLight symbol/transaction | 1–20 — all of them |
+| Mirror handling (un-mirror before blackout, pending state, `stopMirroring`) | 1–4, 13, 15, 16, 20, 21, 22 |
+| Private SkyLight symbol/transaction | 1–22 — all of them |
 
 ## 4. Compatibility re-verification
 
@@ -84,7 +87,7 @@ Copy into the release checklist or exec-plan:
 
 ```
 Hardware verification — <app version> on <macOS version> (<build>) — <date>
-Matrix: 1..17 — pass/fail notes for any deviation
+Matrix: 1..22 — pass/fail notes for any deviation
 N/A rows + reason (e.g. no Touch Bar hardware):
 Recovery path re-confirmed: yes/no
 Tester (QA): <name/agent> — sign-off: <result>

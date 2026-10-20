@@ -36,3 +36,5 @@
 |---|---|---|---|---|
 | 2026-09-22 | (all) | — | initial scores above | harness adoption |
 | 2026-09-22 | Display state logic | B | B | Added 8 regression tests for non-drawable/ghost externals + screen-sleep deferral (`ghost-external-stranding`); real-hardware matrix rows 18–20 still pending QA |
+| 2026-10-20 | Display state logic / enable path | B | B | Added 7 regression tests for reboot stale-off-state recovery via post-failure convergence, stale cached ID refresh, and always-attempt-hardware on a ghost online entry (`enable-noop-leaves-stuck-off-state`); hardware matrix rows 1–13 pending QA |
+| 2026-10-20 | Display state logic / mirror handling | B | B | Added 9 regression tests (8 core + 1 app) for auto-unmirror before blackout: pending wait, apply once drawable, sleep deferral, 15 s timeout, stopMirroring failure, toggle-cancel, Auto-Blackout reconnect into mirror mode, mirrored-only switch enabled (`auto-unmirror-before-blackout`); `stopMirroring` real impl (public CG) not automatable — hardware matrix rows 1–4, 13, 15, 16, 20–22 pending QA |
