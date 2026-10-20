@@ -44,5 +44,5 @@ return CGCompleteDisplayConfiguration(configRef, .forSession) == .success
 
 ## Do not use
 
-- `CGConfigureDisplayMirrorOfDisplay` / brightness APIs as a *substitute for disabling the panel* — they leave the panel active (the workaround this app exists to replace). Using `CGConfigureDisplayMirrorOfDisplay(config, id, kCGNullDirectDisplay)` to **stop** a hardware mirror before a blackout (`PrivateAPIDisplayConfigurer.stopMirroring`, 2026-10-20) is fine — it is a precondition step, not the blackout itself.
+- `CGConfigureDisplayMirrorOfDisplay` / brightness APIs as a *substitute for disabling the panel* — they leave the panel active (the workaround this app exists to replace). Using `CGConfigureDisplayMirrorOfDisplay(config, id, kCGNullDirectDisplay)` to **stop** a hardware mirror before a blackout (`PrivateAPIDisplayConfigurer.stopMirroring`, 2026-10-20) is fine — it is a precondition step, not the blackout itself. The same call with the builtin as master (`startMirroring(_:of:)`) puts that mirror back after the user turns Blackout off.
 - Display reconfiguration calls on the main thread in a tight loop; keep transactions sequential.

@@ -27,18 +27,29 @@ Fallback sub-state (only reachable from OFF):
 
 Pending-unmirror sub-state (added 2026-10-20; only reachable from ON):
 [ON] + disable requested, no usable external, mirrored external present
-   → stopMirroring(ids) ok → isBlackoutPendingUnmirror = true, deadline = now + 15 s
+   → stopMirroring(ids) ok → isBlackoutPendingUnmirror = true, deadline = now + 15 s,
+                             displaysToRemirror = ids
    → state is [ON·pending]   (both screens on; no SkyLight call yet)
    → stopMirroring fails   → stay [ON], lastError = "Couldn't stop screen mirroring…"
 [ON·pending] + usable external appears (emergency check, after sleep deferral)
    → clear pending → disableInternalDisplay() (all guards re-run) → [OFF]
 [ON·pending] + deadline passed
-   → clear pending, lastError = "Couldn't stop screen mirroring…" → [ON]
+   → clear pending + forget displaysToRemirror, lastError = "Couldn't stop screen mirroring…" → [ON]
 [ON·pending] + builtin not online → fall through to normal reconciliation/restore
 [ON·pending] + any manual toggle
-   → clear pending ("never mind") → [ON]
+   → clear pending ("never mind") → [ON] + re-mirror armed
 [ON·fallback] + mirrored external reappears + Auto-Blackout enabled
    → disableInternalDisplay() → [ON·pending] (un-mirror first)
+
+Re-mirror (added 2026-10-20; only for externals Sasih un-mirrored, in-memory):
+[OFF] + manual toggle, enable ok  ─┐
+[ON·pending] + manual toggle      ─┴→ scheduleRemirror(): remirrorDeadline = now + 15 s, try now
+   emergency check retries (after sleep deferral + pending block):
+   builtin ACTIVE && remembered externals active → startMirroring(ids, of: builtin) → forget
+   startMirroring fails / not active yet → retry until deadline, then forget silently (stay extended)
+   internal off or pending again → forget
+Forget without re-mirroring: unplug emergency restore (no drawable external),
+handleWake .leaveOn, pending-unmirror timeout.
 ```
 
 **"Usable external"** (used by every guard/restore/auto-revert decision) = online **and**
@@ -72,9 +83,10 @@ Single-panel helper: `isInternalDisplayOnline(in:)` (`onlineIDs.contains(where: 
 1. `isInternalDisplayOff == true` ⇒ `IsInternalDisplayOff == true` in UserDefaults (same transaction, `saveOffState` on every transition). The reverse is also maintained: every enable writes `false`.
 2. `isInternalDisplayOff == true` ⇒ a usable (drawable) external display was present at the moment of disabling. It may be absent later (that triggers the emergency restore).
 3. The app never disables the last active display, and never disables without a usable external — two independent guards (`DisplayGuards.canDisableInternal` on the usable external count + `DisplayGuards.isLastActiveDisplay` on the active display count).
-4. `internalOnIsFallback` is never persisted: a fresh process starts with no fallback to reconcile. The same holds for `isBlackoutPendingUnmirror` / `unmirrorDeadline` (no new UserDefaults key).
+4. `internalOnIsFallback` is never persisted: a fresh process starts with no fallback to reconcile. The same holds for `isBlackoutPendingUnmirror` / `unmirrorDeadline` and `displaysToRemirror` / `remirrorDeadline` (no new UserDefaults key).
 5. While the screens are asleep, recorded state is not changed by the emergency check: display sleep makes all displays non-drawable and must not be interpreted as an unplug.
 6. Un-mirroring never sets `isInternalDisplayOff`; only a successful guarded `disableInternalDisplay()` does, so invariants 2–3 still hold for blackouts that started from a mirrored setup.
+7. Re-mirroring happens only after `isInternalDisplayOff == false` and with the builtin active (it is the mirror master), only for IDs Sasih un-mirrored, and only after an explicit user Blackout off/cancel — never after an automatic restore.
 
 ## Wake behaviour (`SleepWakeDecision`, pure)
 

@@ -20,6 +20,14 @@ private final class FakeConfigurer: DisplayConfiguring {
         stopMirroringCalls.append(ids)
         return stopMirroringSucceeds
     }
+
+    var startMirroringSucceeds = true
+    var startMirroringCalls: [(ids: [CGDirectDisplayID], master: CGDirectDisplayID)] = []
+
+    func startMirroring(_ ids: [CGDirectDisplayID], of master: CGDirectDisplayID) -> Bool {
+        startMirroringCalls.append((ids, master))
+        return startMirroringSucceeds
+    }
 }
 
 private final class FakeInfoProvider: DisplayInfoProviding {
@@ -159,6 +167,127 @@ final class DisplayManagerTests {
         mirroredManager.performEmergencyCheckIfNeeded()
         #expect(mirroredManager.isInternalDisplayOff == false)
         #expect(configurer.calls.isEmpty)
+    }
+
+    /// Mirrored → blackout applied (panel offline, external drawable).
+    private func makeBlackedOutAfterUnmirror() -> DisplayManager {
+        let mirroredManager = makeMirroredManager()
+        mirroredManager.toggle()
+        finishUnmirroring()
+        mirroredManager.performEmergencyCheckIfNeeded()
+        // The disabled panel leaves the online list.
+        infoProvider.online = [2: false]
+        infoProvider.active = [2]
+        return mirroredManager
+    }
+
+    /// What macOS does once the panel is re-enabled.
+    private func panelBack() {
+        infoProvider.online = [1: true, 2: false]
+        infoProvider.active = [1, 2]
+    }
+
+    @Test func blackoutOffRemirrorsOnceBuiltinIsBack() {
+        let blackedOut = makeBlackedOutAfterUnmirror()
+        #expect(blackedOut.isInternalDisplayOff == true)
+
+        // The enable lands, but the panel isn't drawable yet: wait.
+        configurer.onCall = { self.infoProvider.online = [1: true, 2: false] }
+        blackedOut.toggle()
+        #expect(blackedOut.isInternalDisplayOff == false)
+        #expect(configurer.startMirroringCalls.isEmpty)
+
+        panelBack()
+        blackedOut.performEmergencyCheckIfNeeded()
+        #expect(configurer.startMirroringCalls.count == 1)
+        #expect(configurer.startMirroringCalls.first?.ids == [2])
+        #expect(configurer.startMirroringCalls.first?.master == 1)
+
+        // Only once.
+        blackedOut.performEmergencyCheckIfNeeded()
+        #expect(configurer.startMirroringCalls.count == 1)
+    }
+
+    @Test func blackoutOffRemirrorsImmediatelyWhenBuiltinAlreadyDrawable() {
+        let blackedOut = makeBlackedOutAfterUnmirror()
+        configurer.onCall = { self.panelBack() }
+
+        blackedOut.toggle()
+
+        #expect(configurer.startMirroringCalls.first?.ids == [2])
+    }
+
+    @Test func blackoutOffWithoutPriorUnmirrorNeverMirrors() {
+        infoProvider.online = [1: true, 2: false]
+        _ = manager.disableInternalDisplay()
+        infoProvider.online = [2: false]
+        configurer.onCall = { self.panelBack() }
+
+        manager.toggle()
+        manager.performEmergencyCheckIfNeeded()
+
+        #expect(manager.isInternalDisplayOff == false)
+        #expect(configurer.startMirroringCalls.isEmpty)
+    }
+
+    @Test func remirrorGivesUpAfterTimeoutLeavingScreensExtended() {
+        let blackedOut = makeBlackedOutAfterUnmirror()
+        configurer.onCall = { self.infoProvider.online = [1: true, 2: false] }
+        blackedOut.toggle()
+
+        clock += DisplayManager.remirrorTimeout + 1
+        blackedOut.performEmergencyCheckIfNeeded()
+        panelBack()
+        blackedOut.performEmergencyCheckIfNeeded()
+
+        #expect(configurer.startMirroringCalls.isEmpty)
+        #expect(blackedOut.isInternalDisplayOff == false)
+    }
+
+    @Test func emergencyRestoreAfterUnplugDoesNotRemirror() {
+        let blackedOut = makeBlackedOutAfterUnmirror()
+
+        // External unplugged while blacked out → emergency restore.
+        infoProvider.online = [:]
+        infoProvider.active = []
+        blackedOut.performEmergencyCheckIfNeeded()
+        #expect(blackedOut.isInternalDisplayOff == false)
+
+        // It comes back later; we must not mirror on our own.
+        infoProvider.online = [1: true, 2: false]
+        infoProvider.active = [1, 2]
+        blackedOut.autoRevertOnReconnectEnabled = false
+        blackedOut.performEmergencyCheckIfNeeded()
+        #expect(configurer.startMirroringCalls.isEmpty)
+    }
+
+    @Test func cancellingPendingBlackoutRemirrors() {
+        let mirroredManager = makeMirroredManager()
+        mirroredManager.toggle()
+        #expect(mirroredManager.isBlackoutPendingUnmirror == true)
+
+        mirroredManager.toggle() // never mind
+        finishUnmirroring()
+        mirroredManager.performEmergencyCheckIfNeeded()
+
+        #expect(configurer.calls.isEmpty)
+        #expect(configurer.startMirroringCalls.first?.ids == [2])
+        #expect(configurer.startMirroringCalls.first?.master == 1)
+    }
+
+    @Test func failedRemirrorRetriesThenSucceeds() {
+        let blackedOut = makeBlackedOutAfterUnmirror()
+        configurer.onCall = { self.panelBack() }
+        configurer.startMirroringSucceeds = false
+        blackedOut.toggle()
+        #expect(configurer.startMirroringCalls.count == 1)
+
+        configurer.startMirroringSucceeds = true
+        blackedOut.performEmergencyCheckIfNeeded()
+        #expect(configurer.startMirroringCalls.count == 2)
+
+        blackedOut.performEmergencyCheckIfNeeded()
+        #expect(configurer.startMirroringCalls.count == 2)
     }
 
     @Test func autoRevertStopsMirroringWhenExternalReconnectsMirrored() {

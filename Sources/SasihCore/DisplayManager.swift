@@ -43,6 +43,17 @@ public final class DisplayManager {
     /// How long to wait for macOS to finish un-mirroring before giving up.
     static let unmirrorTimeout: TimeInterval = 15
 
+    /// Externals we took out of mirroring to apply a blackout. When the user
+    /// turns Blackout off, they are mirrored back onto the built-in display so
+    /// the setup returns to how they had it. Only an un-mirror *we* did is
+    /// ever undone. In-memory only (mirroring was changed `.forSession`).
+    private var displaysToRemirror: [CGDirectDisplayID] = []
+    private var remirrorDeadline: TimeInterval?
+
+    /// How long to wait for the built-in display to come back before giving
+    /// up on re-mirroring (the screens then simply stay extended).
+    static let remirrorTimeout: TimeInterval = 15
+
     /// User preference: automatically restore "internal off" once an external
     /// display reconnects after we fell back to the internal display.
     public var autoRevertOnReconnectEnabled: Bool {
@@ -107,6 +118,7 @@ public final class DisplayManager {
             let mirroredIDs = infoProvider.mirroredExternalDisplayIDs()
             if !mirroredIDs.isEmpty {
                 if configurer.stopMirroring(mirroredIDs) {
+                    displaysToRemirror = mirroredIDs
                     isBlackoutPendingUnmirror = true
                     unmirrorDeadline = now() + Self.unmirrorTimeout
                     lastError = nil
@@ -189,13 +201,17 @@ public final class DisplayManager {
         // A manual toggle is always a deliberate choice — it overrides
         // whatever fallback state we were tracking.
         internalOnIsFallback = false
-        // Toggling while a blackout is pending means "never mind".
+        // Toggling while a blackout is pending means "never mind": put the
+        // mirroring back as it was.
         if isBlackoutPendingUnmirror {
             clearPendingUnmirror()
+            scheduleRemirror()
             return
         }
         if isInternalDisplayOff {
-            enableInternalDisplay()
+            if enableInternalDisplay() {
+                scheduleRemirror()
+            }
         } else {
             disableInternalDisplay()
         }
@@ -242,6 +258,7 @@ public final class DisplayManager {
                 }
             } else if let deadline = unmirrorDeadline, now() >= deadline {
                 clearPendingUnmirror()
+                clearRemirror()
                 lastError = "Couldn't stop screen mirroring. Turn off Mirror in System Settings → Displays."
                 logger.notice("performEmergencyCheckIfNeeded: pending blackout timed out — external never became drawable")
             } else if isInternalDisplayOnline(in: onlineIDs) {
@@ -250,6 +267,10 @@ public final class DisplayManager {
                 logger.notice("performEmergencyCheckIfNeeded: blackout pending — waiting for the external to finish un-mirroring")
                 return
             }
+        }
+
+        if remirrorDeadline != nil {
+            remirrorIfReady()
         }
 
         // The panel being absent from the online list is ground truth that it
@@ -274,6 +295,8 @@ public final class DisplayManager {
                 return
             }
             logger.notice("performEmergencyCheckIfNeeded: no drawable external present — restoring internal")
+            // The external we un-mirrored is gone; nothing to mirror back to.
+            clearRemirror()
             internalOnIsFallback = true
             enableInternalDisplay()
             return
@@ -307,6 +330,8 @@ public final class DisplayManager {
         case .reapplyOff:
             disableInternalDisplay()
         case .leaveOn:
+            // Not a user "Blackout off": don't re-mirror behind their back.
+            clearRemirror()
             internalOnIsFallback = true
             if isInternalDisplayOnline(in: infoProvider.onlineDisplayIDs()) {
                 isInternalDisplayOff = false
@@ -344,6 +369,52 @@ public final class DisplayManager {
     private func clearPendingUnmirror() {
         isBlackoutPendingUnmirror = false
         unmirrorDeadline = nil
+    }
+
+    /// Arms the re-mirror (if we un-mirrored anything) and tries it at once;
+    /// the emergency check retries until the built-in display is drawable.
+    private func scheduleRemirror() {
+        guard !displaysToRemirror.isEmpty else { return }
+        remirrorDeadline = now() + Self.remirrorTimeout
+        remirrorIfReady()
+    }
+
+    /// Re-mirrors only once the built-in display is back on and drawable and
+    /// the externals are still connected — mirroring never turns a screen off,
+    /// so a failure or timeout just leaves the screens extended.
+    private func remirrorIfReady() {
+        guard !isInternalDisplayOff, !isBlackoutPendingUnmirror else {
+            clearRemirror()
+            return
+        }
+        let activeIDs = infoProvider.activeDisplayIDs()
+        guard let builtinID = activeIDs.first(where: infoProvider.isBuiltin) else {
+            expireRemirrorIfDue()
+            return
+        }
+        let ids = displaysToRemirror.filter(activeIDs.contains)
+        guard !ids.isEmpty else {
+            expireRemirrorIfDue()
+            return
+        }
+        if configurer.startMirroring(ids, of: builtinID) {
+            logger.notice("remirror: mirrored \(ids, privacy: .public) back onto builtin \(builtinID, privacy: .public)")
+            clearRemirror()
+        } else {
+            logger.notice("remirror: startMirroring FAILED ids=\(ids, privacy: .public) builtin=\(builtinID, privacy: .public)")
+            expireRemirrorIfDue()
+        }
+    }
+
+    private func expireRemirrorIfDue() {
+        guard let deadline = remirrorDeadline, now() >= deadline else { return }
+        logger.notice("remirror: gave up — leaving displays extended")
+        clearRemirror()
+    }
+
+    private func clearRemirror() {
+        displaysToRemirror = []
+        remirrorDeadline = nil
     }
 
     private func isInternalDisplayOnline(in onlineIDs: [CGDirectDisplayID]) -> Bool {

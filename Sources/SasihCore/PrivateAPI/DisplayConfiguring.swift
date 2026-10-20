@@ -10,10 +10,15 @@ public protocol DisplayConfiguring {
     /// session, so a mirrored external becomes a separate, drawable display.
     /// Both screens stay on — this never makes anything dark.
     func stopMirroring(_ ids: [CGDirectDisplayID]) -> Bool
+
+    /// Puts the given displays back into hardware mirroring of `master` for
+    /// the current login session. Both screens stay on.
+    func startMirroring(_ ids: [CGDirectDisplayID], of master: CGDirectDisplayID) -> Bool
 }
 
 public extension DisplayConfiguring {
     func stopMirroring(_ ids: [CGDirectDisplayID]) -> Bool { false }
+    func startMirroring(_ ids: [CGDirectDisplayID], of master: CGDirectDisplayID) -> Bool { false }
 }
 
 /// Real implementation: wraps the resolved private symbol in the public
@@ -45,13 +50,21 @@ public struct PrivateAPIDisplayConfigurer: DisplayConfiguring {
     /// Public CoreGraphics API (no private symbol). `.forSession` so the
     /// user's own mirroring preference comes back at their next login.
     public func stopMirroring(_ ids: [CGDirectDisplayID]) -> Bool {
+        configureMirroring(ids, of: kCGNullDirectDisplay)
+    }
+
+    public func startMirroring(_ ids: [CGDirectDisplayID], of master: CGDirectDisplayID) -> Bool {
+        configureMirroring(ids, of: master)
+    }
+
+    private func configureMirroring(_ ids: [CGDirectDisplayID], of master: CGDirectDisplayID) -> Bool {
         guard !ids.isEmpty else { return false }
 
         var configRef: CGDisplayConfigRef?
         guard CGBeginDisplayConfiguration(&configRef) == .success else { return false }
 
         for id in ids {
-            guard CGConfigureDisplayMirrorOfDisplay(configRef, id, kCGNullDirectDisplay) == .success else {
+            guard CGConfigureDisplayMirrorOfDisplay(configRef, id, master) == .success else {
                 CGCancelDisplayConfiguration(configRef)
                 return false
             }

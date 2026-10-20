@@ -32,6 +32,8 @@ There is intentionally **no** backup file for `IsInternalDisplayOff` — the off
 | `internalOnIsFallback` | `Bool` | process (never persisted) | Internal is on only because no external was present at decision time — gates auto-revert |
 | `isBlackoutPendingUnmirror` | `Bool` (`public private(set)`) | process (never persisted) | Blackout requested, mirroring stopped, waiting for the external to become drawable (added 2026-10-20) |
 | `unmirrorDeadline` | `TimeInterval?` | process (never persisted) | Monotonic (`systemUptime`) deadline, `now + unmirrorTimeout` (15 s); nil when nothing is pending |
+| `displaysToRemirror` | `[CGDirectDisplayID]` (private) | process (never persisted) | Externals Sasih un-mirrored; mirrored back onto the builtin after a user Blackout off/cancel. Cleared on success, give-up, unplug restore, wake `.leaveOn`, or pending timeout |
+| `remirrorDeadline` | `TimeInterval?` (private) | process (never persisted) | Set by `scheduleRemirror()` to `now + remirrorTimeout` (15 s, monotonic); nil when no re-mirror is armed |
 
 ## 4. Runtime entities (view layer)
 

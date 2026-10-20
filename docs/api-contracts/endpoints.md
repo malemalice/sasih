@@ -36,20 +36,23 @@ CGCompleteDisplayConfiguration(configRef, .forSession)      // public
 | Return | `CGError`; any non-`.success` aborts the transaction and `setDisplay` returns `false` |
 | Precondition | Never issue a change for a display already in the target state (fails the whole transaction) — see `DisplayStateDiff`. `disableInternalDisplay()` checks the panel is absent from the online list; `enableInternalDisplay()` deliberately always attempts the call (the online list can hold a ghost builtin entry) and, if the call is rejected, treats the builtin being online as success |
 
-## A.1b Stop mirroring (public CoreGraphics, added 2026-10-20)
+## A.1b Stop / start mirroring (public CoreGraphics, added 2026-10-20)
 
 ```
 CGBeginDisplayConfiguration(&configRef)
-  CGConfigureDisplayMirrorOfDisplay(configRef, id, kCGNullDirectDisplay)   // per mirrored external id
+  CGConfigureDisplayMirrorOfDisplay(configRef, id, master)   // per external id
+                                    // stop:  master = kCGNullDirectDisplay
+                                    // start: master = builtin display ID
 CGCompleteDisplayConfiguration(configRef, .forSession)
   ↳ on a per-id non-success: CGCancelDisplayConfiguration(configRef)
 ```
 
 | Property | Value |
 |---|---|
-| Caller | `DisplayManager.disableInternalDisplay()`, only when the usable-external guard refuses and `mirroredExternalDisplayIDs()` is non-empty |
-| Effect | Takes the externals out of their mirror set for this login session; both screens stay on. `.forSession` → user's mirror preference returns at next login |
-| Return | `Bool` (`stopMirroring(_:)`); `false` on empty ids or any non-`.success` |
+| Caller (stop) | `DisplayManager.disableInternalDisplay()`, only when the usable-external guard refuses and `mirroredExternalDisplayIDs()` is non-empty |
+| Caller (start) | `DisplayManager.remirrorIfReady()` — after a user `toggle()` that turned Blackout off or cancelled a pending blackout, only for IDs Sasih itself un-mirrored, only once the builtin is in the active list and those externals are still active |
+| Effect | Stop takes the externals out of their mirror set; start mirrors them back onto the builtin. Both screens stay on. `.forSession` → the user's mirror preference also returns at next login (backstop) |
+| Return | `Bool` (`stopMirroring(_:)` / `startMirroring(_:of:)`, shared `configureMirroring(_:of:)`); `false` on empty ids or any non-`.success` |
 | Not a disable | Never darkens a display; the blackout itself is still A.1, applied later by the guarded disable once the external is drawable |
 
 ## A.2 Display queries (public CoreGraphics)

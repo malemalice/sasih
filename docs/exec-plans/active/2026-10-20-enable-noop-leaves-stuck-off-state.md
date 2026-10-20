@@ -21,7 +21,7 @@ User ran Blackout, then rebooted the Mac and relaunched the app. Every launch sh
 3. On next launch, `restoreOnLaunchIfNeeded()` sees the persisted `true` and calls `enableInternalDisplay()`, which unconditionally issues `SLSConfigureDisplayEnabled(id, 1)` (contract: "never issue a change for a display already in the target state — it fails the whole transaction").
 4. The transaction fails, so `lastError` is set and the off-state is (correctly, by the old rule) left `true`. Because the panel is already on, every retry — launch, backstop tick, manual toggle — hits the same doomed no-op and the app can never converge.
 
-The disable path already has the mirrored idempotency guard (`internal display already offline → record off, no hardware call`); the enable path was missing it.
+The disable path already has the symmetric idempotency guard (`internal display already offline → record off, no hardware call`); the enable path was missing it.
 
 ## Scope
 
